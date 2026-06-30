@@ -1,0 +1,18 @@
+{
+  "name": "library-pulse-backend",
+  "version": "1.0.0",
+  "description": "Library Pulse — Figma Library Publish → Slack notifications backend",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod",
+    "deploy:preview": "vercel"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}

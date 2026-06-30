@@ -1,0 +1,9 @@
+node_modules/
+.vercel/
+**/dist/
+**/build/
+coverage/
+.husky/_/
+package-lock.json
+*.min.js
+*.min.css

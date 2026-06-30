@@ -1,0 +1,13 @@
+{
+  "name": "Library Pulse",
+  "id": "library-pulse",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["https://library-pulse.vercel.app"],
+    "reasoning": "Connects to the Library Pulse backend for Slack OAuth, Figma webhook registration, and notification configuration."
+  }
+}

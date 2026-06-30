@@ -1,0 +1,7 @@
+*                                   @gragtajar
+backend/                            @gragtajar
+backend/lib/encryption.js           @gragtajar
+backend/api/webhook.js              @gragtajar
+database/schema.sql                 @gragtajar
+docs/adrs/                          @gragtajar
+.github/                            @gragtajar

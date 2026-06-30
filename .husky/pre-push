@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Cheap local gate before pushing — full CI runs typecheck + tests too.
+npm run typecheck
+npm test --silent
