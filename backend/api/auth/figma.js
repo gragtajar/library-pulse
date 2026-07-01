@@ -42,7 +42,13 @@ export default withErrorHandling(
 
     if (error) {
       logger.error("auth_session_create_failed", { provider: "figma", err: error });
-      throw new ValidationError("Could not create auth session");
+      // Surface the underlying DB cause (e.g. a missing column from an
+      // un-migrated schema) instead of a generic message — this endpoint is
+      // only ever hit by the installer's own plugin, so a precise error is
+      // worth far more than hiding it. See database/migrations/002.
+      throw new ValidationError(
+        `Could not create auth session: ${error.message || error.code || "database error"}`,
+      );
     }
 
     const redirectUri = `${envOrThrow("PUBLIC_URL")}/api/auth/figma-callback`;

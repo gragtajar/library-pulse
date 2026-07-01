@@ -43,7 +43,10 @@ export default withErrorHandling(
 
     if (error) {
       logger.error("auth_session_create_failed", { provider: "slack", err: error });
-      throw new ValidationError("Could not create auth session");
+      // Surface the underlying DB cause (see figma.js / migrations/002).
+      throw new ValidationError(
+        `Could not create auth session: ${error.message || error.code || "database error"}`,
+      );
     }
 
     const redirectUri = `${envOrThrow("PUBLIC_URL")}/api/auth/slack-callback`;
