@@ -1,925 +1,1232 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<style>
-  /* ── Reset + Figma-native feel ── */
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      /* ── Reset + Figma-native feel ── */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-  body {
-    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-size: 12px;
-    color: var(--figma-color-text, #333);
-    background: var(--figma-color-bg, #fff);
-    line-height: 1.5;
-    padding: 16px;
-    overflow-y: auto;
-  }
+      body {
+        font-family:
+          Inter,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        font-size: 12px;
+        color: var(--figma-color-text, #333);
+        background: var(--figma-color-bg, #fff);
+        line-height: 1.5;
+        padding: 16px;
+        overflow-y: auto;
+      }
 
-  /* ── Typography ── */
-  h1 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-  h2 { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--figma-color-text, #333); }
-  .subtitle { font-size: 11px; color: var(--figma-color-text-secondary, #999); margin-bottom: 20px; }
+      /* ── Typography ── */
+      h1 {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      h2 {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--figma-color-text, #333);
+      }
+      .subtitle {
+        font-size: 11px;
+        color: var(--figma-color-text-secondary, #999);
+        margin-bottom: 20px;
+      }
 
-  /* ── Sections ── */
-  .section { margin-bottom: 20px; }
-  .section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .section-header .icon { font-size: 16px; }
+      /* ── Sections ── */
+      .section {
+        margin-bottom: 20px;
+      }
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .section-header .icon {
+        font-size: 16px;
+      }
 
-  /* ── Cards ── */
-  .card {
-    background: var(--figma-color-bg-secondary, #f5f5f5);
-    border: 1px solid var(--figma-color-border, #e5e5e5);
-    border-radius: 8px;
-    padding: 14px;
-    margin-bottom: 10px;
-  }
+      /* ── Cards ── */
+      .card {
+        background: var(--figma-color-bg-secondary, #f5f5f5);
+        border: 1px solid var(--figma-color-border, #e5e5e5);
+        border-radius: 8px;
+        padding: 14px;
+        margin-bottom: 10px;
+      }
 
-  /* ── Status badges ── */
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    font-weight: 500;
-    padding: 3px 8px;
-    border-radius: 10px;
-  }
-  .badge-success { background: #dafbe1; color: #116329; }
-  .badge-warning { background: #fff8c5; color: #4d2d00; }
-  .badge-neutral { background: #eaeef2; color: #57606a; }
+      /* ── Status badges ── */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 3px 8px;
+        border-radius: 10px;
+      }
+      .badge-success {
+        background: #dafbe1;
+        color: #116329;
+      }
+      .badge-warning {
+        background: #fff8c5;
+        color: #4d2d00;
+      }
+      .badge-neutral {
+        background: #eaeef2;
+        color: #57606a;
+      }
 
-  /* ── Buttons ── */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    padding: 8px 16px;
-    border-radius: 6px;
-    border: none;
-    cursor: pointer;
-    width: 100%;
-    transition: background 0.15s, opacity 0.15s;
-  }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-primary {
-    background: var(--figma-color-bg-brand, #0d99ff);
-    color: #fff;
-  }
-  .btn-primary:hover:not(:disabled) { opacity: 0.9; }
-  .btn-secondary {
-    background: var(--figma-color-bg-secondary, #f5f5f5);
-    border: 1px solid var(--figma-color-border, #e5e5e5);
-    color: var(--figma-color-text, #333);
-  }
-  .btn-secondary:hover:not(:disabled) { background: var(--figma-color-bg-hover, #eee); }
-  .btn-danger {
-    background: #fff;
-    border: 1px solid #cf222e;
-    color: #cf222e;
-  }
-  .btn-danger:hover:not(:disabled) { background: #ffebe9; }
-  .btn-sm { padding: 5px 10px; font-size: 11px; width: auto; }
-  .btn-row { display: flex; gap: 8px; }
-  .btn-row .btn { flex: 1; }
+      /* ── Buttons ── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 8px 16px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        width: 100%;
+        transition:
+          background 0.15s,
+          opacity 0.15s;
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-primary {
+        background: var(--figma-color-bg-brand, #0d99ff);
+        color: #fff;
+      }
+      .btn-primary:hover:not(:disabled) {
+        opacity: 0.9;
+      }
+      .btn-secondary {
+        background: var(--figma-color-bg-secondary, #f5f5f5);
+        border: 1px solid var(--figma-color-border, #e5e5e5);
+        color: var(--figma-color-text, #333);
+      }
+      .btn-secondary:hover:not(:disabled) {
+        background: var(--figma-color-bg-hover, #eee);
+      }
+      .btn-danger {
+        background: #fff;
+        border: 1px solid #cf222e;
+        color: #cf222e;
+      }
+      .btn-danger:hover:not(:disabled) {
+        background: #ffebe9;
+      }
+      .btn-sm {
+        padding: 5px 10px;
+        font-size: 11px;
+        width: auto;
+      }
+      .btn-row {
+        display: flex;
+        gap: 8px;
+      }
+      .btn-row .btn {
+        flex: 1;
+      }
 
-  /* ── Inputs ── */
-  .input-group { margin-bottom: 12px; }
-  .input-group label {
-    display: block;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--figma-color-text-secondary, #999);
-    margin-bottom: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .input-group input {
-    width: 100%;
-    padding: 8px 10px;
-    font-size: 12px;
-    border: 1px solid var(--figma-color-border, #e5e5e5);
-    border-radius: 6px;
-    background: var(--figma-color-bg, #fff);
-    color: var(--figma-color-text, #333);
-    outline: none;
-  }
-  .input-group input:focus {
-    border-color: var(--figma-color-bg-brand, #0d99ff);
-    box-shadow: 0 0 0 1px var(--figma-color-bg-brand, #0d99ff);
-  }
-  .input-group .hint {
-    font-size: 10px;
-    color: var(--figma-color-text-tertiary, #b3b3b3);
-    margin-top: 3px;
-  }
+      /* ── Inputs ── */
+      .input-group {
+        margin-bottom: 12px;
+      }
+      .input-group label {
+        display: block;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--figma-color-text-secondary, #999);
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .input-group input {
+        width: 100%;
+        padding: 8px 10px;
+        font-size: 12px;
+        border: 1px solid var(--figma-color-border, #e5e5e5);
+        border-radius: 6px;
+        background: var(--figma-color-bg, #fff);
+        color: var(--figma-color-text, #333);
+        outline: none;
+      }
+      .input-group input:focus {
+        border-color: var(--figma-color-bg-brand, #0d99ff);
+        box-shadow: 0 0 0 1px var(--figma-color-bg-brand, #0d99ff);
+      }
+      .input-group .hint {
+        font-size: 10px;
+        color: var(--figma-color-text-tertiary, #b3b3b3);
+        margin-top: 3px;
+      }
 
-  /* ── Channel pills ── */
-  .channels-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-  .channel-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    background: var(--figma-color-bg-secondary, #f5f5f5);
-    border: 1px solid var(--figma-color-border, #e5e5e5);
-    border-radius: 12px;
-    font-size: 11px;
-  }
-  .channel-pill .remove {
-    cursor: pointer;
-    color: var(--figma-color-text-tertiary, #b3b3b3);
-    font-size: 13px;
-    line-height: 1;
-  }
-  .channel-pill .remove:hover { color: #cf222e; }
+      /* ── Channel pills ── */
+      .channels-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .channel-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        background: var(--figma-color-bg-secondary, #f5f5f5);
+        border: 1px solid var(--figma-color-border, #e5e5e5);
+        border-radius: 12px;
+        font-size: 11px;
+      }
+      .channel-pill .remove {
+        cursor: pointer;
+        color: var(--figma-color-text-tertiary, #b3b3b3);
+        font-size: 13px;
+        line-height: 1;
+      }
+      .channel-pill .remove:hover {
+        color: #cf222e;
+      }
 
-  /* ── File selector ── */
-  .file-option {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border: 1px solid var(--figma-color-border, #e5e5e5);
-    border-radius: 6px;
-    cursor: pointer;
-    margin-bottom: 6px;
-    transition: border-color 0.15s, background 0.15s;
-  }
-  .file-option:hover { background: var(--figma-color-bg-hover, #fafafa); }
-  .file-option.selected {
-    border-color: var(--figma-color-bg-brand, #0d99ff);
-    background: rgba(13, 153, 255, 0.06);
-  }
-  .file-option .radio {
-    width: 16px; height: 16px;
-    border: 2px solid var(--figma-color-border, #ccc);
-    border-radius: 50%;
-    flex-shrink: 0;
-    position: relative;
-  }
-  .file-option.selected .radio {
-    border-color: var(--figma-color-bg-brand, #0d99ff);
-  }
-  .file-option.selected .radio::after {
-    content: "";
-    position: absolute;
-    top: 3px; left: 3px;
-    width: 6px; height: 6px;
-    background: var(--figma-color-bg-brand, #0d99ff);
-    border-radius: 50%;
-  }
-  .file-option .file-info { flex: 1; min-width: 0; }
-  .file-option .file-name {
-    font-weight: 500;
-    font-size: 12px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .file-option .file-key {
-    font-size: 10px;
-    color: var(--figma-color-text-tertiary, #b3b3b3);
-    font-family: "SF Mono", SFMono-Regular, Consolas, monospace;
-  }
+      /* ── File selector ── */
+      .file-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--figma-color-border, #e5e5e5);
+        border-radius: 6px;
+        cursor: pointer;
+        margin-bottom: 6px;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+      }
+      .file-option:hover {
+        background: var(--figma-color-bg-hover, #fafafa);
+      }
+      .file-option.selected {
+        border-color: var(--figma-color-bg-brand, #0d99ff);
+        background: rgba(13, 153, 255, 0.06);
+      }
+      .file-option .radio {
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--figma-color-border, #ccc);
+        border-radius: 50%;
+        flex-shrink: 0;
+        position: relative;
+      }
+      .file-option.selected .radio {
+        border-color: var(--figma-color-bg-brand, #0d99ff);
+      }
+      .file-option.selected .radio::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 6px;
+        height: 6px;
+        background: var(--figma-color-bg-brand, #0d99ff);
+        border-radius: 50%;
+      }
+      .file-option .file-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .file-option .file-name {
+        font-weight: 500;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .file-option .file-key {
+        font-size: 10px;
+        color: var(--figma-color-text-tertiary, #b3b3b3);
+        font-family: "SF Mono", SFMono-Regular, Consolas, monospace;
+      }
 
-  /* ── Spinner ── */
-  .spinner {
-    width: 16px; height: 16px;
-    border: 2px solid var(--figma-color-border, #e5e5e5);
-    border-top-color: var(--figma-color-bg-brand, #0d99ff);
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-    display: inline-block;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
+      /* ── Spinner ── */
+      .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--figma-color-border, #e5e5e5);
+        border-top-color: var(--figma-color-bg-brand, #0d99ff);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        display: inline-block;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
 
-  /* ── Divider ── */
-  .divider {
-    border: none;
-    border-top: 1px solid var(--figma-color-border, #e5e5e5);
-    margin: 16px 0;
-  }
+      /* ── Divider ── */
+      .divider {
+        border: none;
+        border-top: 1px solid var(--figma-color-border, #e5e5e5);
+        margin: 16px 0;
+      }
 
-  /* ── Views ── */
-  .view { display: none; }
-  .view.active { display: block; }
+      /* ── Views ── */
+      .view {
+        display: none;
+      }
+      .view.active {
+        display: block;
+      }
 
-  /* ── Dashboard specifics ── */
-  .dash-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 6px 0;
-    font-size: 12px;
-  }
-  .dash-label { color: var(--figma-color-text-secondary, #999); }
-  .dash-value { font-weight: 500; }
+      /* ── Dashboard specifics ── */
+      .dash-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        font-size: 12px;
+      }
+      .dash-label {
+        color: var(--figma-color-text-secondary, #999);
+      }
+      .dash-value {
+        font-weight: 500;
+      }
 
-  /* ── Connection steps ── */
-  .step {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-  .step-num {
-    width: 24px; height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 700;
-    flex-shrink: 0;
-  }
-  .step-num.pending {
-    background: var(--figma-color-bg-secondary, #f5f5f5);
-    color: var(--figma-color-text-secondary, #999);
-  }
-  .step-num.done { background: #dafbe1; color: #116329; }
-  .step-num.active {
-    background: var(--figma-color-bg-brand, #0d99ff);
-    color: #fff;
-  }
-  .step-content { flex: 1; padding-top: 2px; }
-  .step-title { font-weight: 600; font-size: 12px; margin-bottom: 4px; }
-  .step-desc { font-size: 11px; color: var(--figma-color-text-secondary, #999); margin-bottom: 8px; }
-</style>
-</head>
-<body>
-
-<!-- ════════════════════════════════════════ -->
-<!--  LOADING VIEW                           -->
-<!-- ════════════════════════════════════════ -->
-<div id="view-loading" class="view active" style="text-align:center;padding-top:100px;">
-  <div class="spinner" style="width:28px;height:28px;margin:0 auto 16px;"></div>
-  <p style="color:var(--figma-color-text-secondary,#999);">Loading Library Pulse…</p>
-</div>
-
-<!-- ════════════════════════════════════════ -->
-<!--  SETUP VIEW                             -->
-<!-- ════════════════════════════════════════ -->
-<div id="view-setup" class="view">
-  <h1>Library Pulse</h1>
-  <p class="subtitle">Get Slack notifications when your Figma library is published.</p>
-
-  <!-- Step 1: Connect Slack -->
-  <div class="step" id="step-slack">
-    <div class="step-num active" id="step-slack-num">1</div>
-    <div class="step-content">
-      <div class="step-title">Connect Slack</div>
-      <div class="step-desc">Authorize Library Pulse to post messages to your Slack workspace.</div>
-      <button class="btn btn-secondary" id="btn-connect-slack" onclick="connectSlack()">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.36 10.04a1.68 1.68 0 1 1-1.68-1.68h1.68v1.68zm.84 0a1.68 1.68 0 1 1 3.36 0v4.28a1.68 1.68 0 1 1-3.36 0v-4.28zM5.96 3.36a1.68 1.68 0 1 1 1.68-1.68v1.68H5.96zm0 .84a1.68 1.68 0 0 1 0 3.36H1.68a1.68 1.68 0 0 1 0-3.36h4.28zM12.64 5.96a1.68 1.68 0 1 1 1.68 1.68h-1.68V5.96zm-.84 0a1.68 1.68 0 0 1-3.36 0V1.68a1.68 1.68 0 0 1 3.36 0v4.28zM10.04 12.64a1.68 1.68 0 1 1-1.68 1.68v-1.68h1.68zm0-.84a1.68 1.68 0 0 1 0-3.36h4.28a1.68 1.68 0 0 1 0 3.36h-4.28z" fill="#E01E5A"/></svg>
-        Connect to Slack
-      </button>
-      <div id="slack-status" style="margin-top:8px;"></div>
+      /* ── Connection steps ── */
+      .step {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .step-num {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .step-num.pending {
+        background: var(--figma-color-bg-secondary, #f5f5f5);
+        color: var(--figma-color-text-secondary, #999);
+      }
+      .step-num.done {
+        background: #dafbe1;
+        color: #116329;
+      }
+      .step-num.active {
+        background: var(--figma-color-bg-brand, #0d99ff);
+        color: #fff;
+      }
+      .step-content {
+        flex: 1;
+        padding-top: 2px;
+      }
+      .step-title {
+        font-weight: 600;
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
+      .step-desc {
+        font-size: 11px;
+        color: var(--figma-color-text-secondary, #999);
+        margin-bottom: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ════════════════════════════════════════ -->
+    <!--  LOADING VIEW                           -->
+    <!-- ════════════════════════════════════════ -->
+    <div id="view-loading" class="view active" style="text-align: center; padding-top: 100px">
+      <div class="spinner" style="width: 28px; height: 28px; margin: 0 auto 16px"></div>
+      <p style="color: var(--figma-color-text-secondary, #999)">Loading Library Pulse…</p>
     </div>
-  </div>
 
-  <!-- Step 2: Connect Figma -->
-  <div class="step" id="step-figma">
-    <div class="step-num pending" id="step-figma-num">2</div>
-    <div class="step-content">
-      <div class="step-title">Connect Figma</div>
-      <div class="step-desc">Authorize webhook registration so Library Pulse can listen for publish events.</div>
-      <button class="btn btn-secondary" id="btn-connect-figma" onclick="connectFigma()" disabled>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5.33 16a2.67 2.67 0 0 0 2.67-2.67V10.67H5.33a2.67 2.67 0 0 0 0 5.33z" fill="#0ACF83"/><path d="M2.67 8A2.67 2.67 0 0 1 5.33 5.33H8V10.67H5.33A2.67 2.67 0 0 1 2.67 8z" fill="#A259FF"/><path d="M2.67 2.67A2.67 2.67 0 0 1 5.33 0H8v5.33H5.33a2.67 2.67 0 0 1-2.67-2.67z" fill="#F24E1E"/><path d="M8 0h2.67a2.67 2.67 0 0 1 0 5.33H8V0z" fill="#FF7262"/><path d="M13.33 8A2.67 2.67 0 1 1 8 8a2.67 2.67 0 0 1 5.33 0z" fill="#1ABCFE"/></svg>
-        Connect Figma Account
-      </button>
-      <div id="figma-status" style="margin-top:8px;"></div>
-    </div>
-  </div>
+    <!-- ════════════════════════════════════════ -->
+    <!--  SETUP VIEW                             -->
+    <!-- ════════════════════════════════════════ -->
+    <div id="view-setup" class="view">
+      <h1>Library Pulse</h1>
+      <p class="subtitle">Get Slack notifications when your Figma library is published.</p>
 
-  <!-- Step 3: Configure -->
-  <div class="step" id="step-config">
-    <div class="step-num pending" id="step-config-num">3</div>
-    <div class="step-content">
-      <div class="step-title">Configure</div>
-      <div class="step-desc">Select a Figma file and Slack channels.</div>
-
-      <div id="config-form" style="opacity:0.5;pointer-events:none;">
-        <!-- File selection -->
-        <div class="section">
-          <h2>Figma File</h2>
-
-          <div class="file-option selected" id="opt-current" onclick="selectFileOption('current')">
-            <div class="radio"></div>
-            <div class="file-info">
-              <div class="file-name" id="current-file-name">Loading…</div>
-              <div class="file-key" id="current-file-key">—</div>
-            </div>
-            <span class="badge badge-success" style="font-size:10px;">Current file</span>
+      <!-- Figma account — connected automatically from your Figma login -->
+      <div class="step" id="figma-banner">
+        <div class="step-num active" id="figma-banner-icon">
+          <span class="spinner" style="width: 12px; height: 12px; border-width: 2px"></span>
+        </div>
+        <div class="step-content">
+          <div class="step-title" id="figma-banner-title">Connecting your Figma account…</div>
+          <div class="step-desc" id="figma-banner-desc">
+            We use your existing Figma login to watch your library for publishes. A browser tab may
+            open once to confirm access — no need to sign in again.
           </div>
+          <button
+            class="btn btn-secondary btn-sm"
+            id="btn-figma-retry"
+            onclick="startFigmaAuto()"
+            style="display: none"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
 
-          <div class="file-option" id="opt-manual" onclick="selectFileOption('manual')">
-            <div class="radio"></div>
-            <div class="file-info">
-              <div class="file-name">Enter file ID manually</div>
-              <div class="file-key">Use a different file</div>
-            </div>
+      <!-- Step 1: Connect Slack -->
+      <div class="step" id="step-slack">
+        <div class="step-num active" id="step-slack-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Connect Slack</div>
+          <div class="step-desc">
+            Authorize Library Pulse to post messages to your Slack workspace.
           </div>
+          <button class="btn btn-secondary" id="btn-connect-slack" onclick="connectSlack()">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M3.36 10.04a1.68 1.68 0 1 1-1.68-1.68h1.68v1.68zm.84 0a1.68 1.68 0 1 1 3.36 0v4.28a1.68 1.68 0 1 1-3.36 0v-4.28zM5.96 3.36a1.68 1.68 0 1 1 1.68-1.68v1.68H5.96zm0 .84a1.68 1.68 0 0 1 0 3.36H1.68a1.68 1.68 0 0 1 0-3.36h4.28zM12.64 5.96a1.68 1.68 0 1 1 1.68 1.68h-1.68V5.96zm-.84 0a1.68 1.68 0 0 1-3.36 0V1.68a1.68 1.68 0 0 1 3.36 0v4.28zM10.04 12.64a1.68 1.68 0 1 1-1.68 1.68v-1.68h1.68zm0-.84a1.68 1.68 0 0 1 0-3.36h4.28a1.68 1.68 0 0 1 0 3.36h-4.28z"
+                fill="#E01E5A"
+              />
+            </svg>
+            Connect to Slack
+          </button>
+          <div id="slack-status" style="margin-top: 8px"></div>
+        </div>
+      </div>
 
-          <div id="manual-input-wrap" style="display:none;margin-top:8px;">
-            <div class="input-group">
-              <label>File ID or URL</label>
-              <input type="text" id="input-file-id" placeholder="e.g. jxunc0ljQa3mKVki8K5kj9 or full Figma URL" />
-              <div class="hint">Paste the file key from the URL: figma.com/file/<strong>THIS_PART</strong>/…</div>
+      <!-- Step 2: Configure -->
+      <div class="step" id="step-config">
+        <div class="step-num pending" id="step-config-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Configure</div>
+          <div class="step-desc">Select a Figma file and Slack channels.</div>
+
+          <div id="config-form" style="opacity: 0.5; pointer-events: none">
+            <!-- File selection -->
+            <div class="section">
+              <h2>Figma File</h2>
+
+              <div
+                class="file-option selected"
+                id="opt-current"
+                onclick="selectFileOption('current')"
+              >
+                <div class="radio"></div>
+                <div class="file-info">
+                  <div class="file-name" id="current-file-name">Loading…</div>
+                  <div class="file-key" id="current-file-key">—</div>
+                </div>
+                <span class="badge badge-success" style="font-size: 10px">Current file</span>
+              </div>
+
+              <div class="file-option" id="opt-manual" onclick="selectFileOption('manual')">
+                <div class="radio"></div>
+                <div class="file-info">
+                  <div class="file-name">Enter file ID manually</div>
+                  <div class="file-key">Use a different file</div>
+                </div>
+              </div>
+
+              <div id="manual-input-wrap" style="display: none; margin-top: 8px">
+                <div class="input-group">
+                  <label>File ID or URL</label>
+                  <input
+                    type="text"
+                    id="input-file-id"
+                    placeholder="e.g. jxunc0ljQa3mKVki8K5kj9 or full Figma URL"
+                  />
+                  <div class="hint">
+                    Paste the file key from the URL: figma.com/file/<strong>THIS_PART</strong>/…
+                  </div>
+                </div>
+                <div class="input-group">
+                  <label>File name (optional)</label>
+                  <input type="text" id="input-file-name" placeholder="e.g. My Design System" />
+                </div>
+              </div>
             </div>
-            <div class="input-group">
-              <label>File name (optional)</label>
-              <input type="text" id="input-file-name" placeholder="e.g. My Design System" />
+
+            <hr class="divider" />
+
+            <!-- Channel entry -->
+            <div class="section">
+              <h2>
+                Slack Channels
+                <span style="font-weight: 400; color: var(--figma-color-text-tertiary, #b3b3b3)"
+                  >(1–3)</span
+                >
+              </h2>
+
+              <div class="channels-list" id="channels-list"></div>
+
+              <div style="display: flex; gap: 6px" id="channel-add-row">
+                <div class="input-group" style="flex: 1; margin-bottom: 0">
+                  <input
+                    type="text"
+                    id="input-channel"
+                    placeholder="Channel ID (e.g. C046B2FRZ8W)"
+                  />
+                </div>
+                <button
+                  class="btn btn-secondary btn-sm"
+                  onclick="addChannel()"
+                  id="btn-add-channel"
+                  style="height: 33px; margin-top: 0"
+                >
+                  Add
+                </button>
+              </div>
+              <div class="hint" style="margin-top: 4px">
+                Right-click a Slack channel → View channel details → scroll to find Channel ID.
+              </div>
             </div>
+
+            <hr class="divider" />
+
+            <!-- Save -->
+            <button class="btn btn-primary" id="btn-save" onclick="saveConfig()" disabled>
+              Save &amp; Activate
+            </button>
           </div>
         </div>
-
-        <hr class="divider" />
-
-        <!-- Figma Team ID -->
-        <div class="section">
-          <div class="input-group">
-            <label>Figma Team ID</label>
-            <input type="text" id="input-team-id" placeholder="e.g. 123456789" />
-            <div class="hint">Find it in your team URL: figma.com/files/team/<strong>TEAM_ID</strong>/…</div>
-          </div>
-        </div>
-
-        <hr class="divider" />
-
-        <!-- Channel entry -->
-        <div class="section">
-          <h2>Slack Channels <span style="font-weight:400;color:var(--figma-color-text-tertiary,#b3b3b3);">(1–3)</span></h2>
-
-          <div class="channels-list" id="channels-list"></div>
-
-          <div style="display:flex;gap:6px;" id="channel-add-row">
-            <div class="input-group" style="flex:1;margin-bottom:0;">
-              <input type="text" id="input-channel" placeholder="Channel ID (e.g. C046B2FRZ8W)" />
-            </div>
-            <button class="btn btn-secondary btn-sm" onclick="addChannel()" id="btn-add-channel" style="height:33px;margin-top:0;">Add</button>
-          </div>
-          <div class="hint" style="margin-top:4px;">Right-click a Slack channel → View channel details → scroll to find Channel ID.</div>
-        </div>
-
-        <hr class="divider" />
-
-        <!-- Save -->
-        <button class="btn btn-primary" id="btn-save" onclick="saveConfig()" disabled>
-          Save &amp; Activate
-        </button>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- ════════════════════════════════════════ -->
-<!--  DASHBOARD VIEW                         -->
-<!-- ════════════════════════════════════════ -->
-<div id="view-dashboard" class="view">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-    <h1>Library Pulse</h1>
-    <span class="badge badge-success" id="dash-status-badge">Active</span>
-  </div>
-  <p class="subtitle">Notifications are flowing.</p>
+    <!-- ════════════════════════════════════════ -->
+    <!--  DASHBOARD VIEW                         -->
+    <!-- ════════════════════════════════════════ -->
+    <div id="view-dashboard" class="view">
+      <div
+        style="
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 4px;
+        "
+      >
+        <h1>Library Pulse</h1>
+        <span class="badge badge-success" id="dash-status-badge">Active</span>
+      </div>
+      <p class="subtitle">Notifications are flowing.</p>
 
-  <div class="card">
-    <div class="dash-row">
-      <span class="dash-label">Figma File</span>
-      <span class="dash-value" id="dash-file-name">—</span>
+      <div class="card">
+        <div class="dash-row">
+          <span class="dash-label">Figma File</span>
+          <span class="dash-value" id="dash-file-name">—</span>
+        </div>
+        <div class="dash-row">
+          <span class="dash-label">File Key</span>
+          <span
+            class="dash-value"
+            id="dash-file-key"
+            style="font-family: &quot;SF Mono&quot;, monospace; font-size: 11px"
+            >—</span
+          >
+        </div>
+        <div class="dash-row">
+          <span class="dash-label">Slack Workspace</span>
+          <span class="dash-value" id="dash-slack-workspace">—</span>
+        </div>
+        <div class="dash-row">
+          <span class="dash-label">Channels</span>
+          <span class="dash-value" id="dash-channels">—</span>
+        </div>
+        <div class="dash-row">
+          <span class="dash-label">Webhook</span>
+          <span class="dash-value" id="dash-webhook-status">—</span>
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-top: 16px">
+        <button class="btn btn-secondary" onclick="editConfig()">Edit</button>
+        <button class="btn btn-danger" onclick="deleteConfig()">Remove</button>
+      </div>
     </div>
-    <div class="dash-row">
-      <span class="dash-label">File Key</span>
-      <span class="dash-value" id="dash-file-key" style="font-family:'SF Mono',monospace;font-size:11px;">—</span>
-    </div>
-    <div class="dash-row">
-      <span class="dash-label">Slack Workspace</span>
-      <span class="dash-value" id="dash-slack-workspace">—</span>
-    </div>
-    <div class="dash-row">
-      <span class="dash-label">Channels</span>
-      <span class="dash-value" id="dash-channels">—</span>
-    </div>
-    <div class="dash-row">
-      <span class="dash-label">Webhook</span>
-      <span class="dash-value" id="dash-webhook-status">—</span>
-    </div>
-  </div>
 
-  <div class="btn-row" style="margin-top:16px;">
-    <button class="btn btn-secondary" onclick="editConfig()">Edit</button>
-    <button class="btn btn-danger" onclick="deleteConfig()">Remove</button>
-  </div>
-</div>
+    <!-- ════════════════════════════════════════ -->
+    <!--  JAVASCRIPT                             -->
+    <!-- ════════════════════════════════════════ -->
+    <script>
+      const API_BASE = "https://library-pulse.vercel.app";
 
-<!-- ════════════════════════════════════════ -->
-<!--  JAVASCRIPT                             -->
-<!-- ════════════════════════════════════════ -->
-<script>
-const API_BASE = "https://library-pulse.vercel.app";
+      // Slack channel ID format (public C…, private G…, DM D…, MPIM MP…).
+      // Keep in sync with backend/lib/validators.js SLACK_CHANNEL_ID.
+      const SLACK_CHANNEL_ID_RE = /^(C|G|D|MP)[A-Z0-9]{6,20}$/;
 
-// Slack channel ID format (public C…, private G…, DM D…, MPIM MP…).
-// Keep in sync with backend/lib/validators.js SLACK_CHANNEL_ID.
-const SLACK_CHANNEL_ID_RE = /^(C|G|D|MP)[A-Z0-9]{6,20}$/;
-
-// Convenience wrapper so every API call carries X-Figma-User. The backend
-// uses this header to authorise per-user mutations.
-async function api(path, init = {}) {
-  const headers = Object.assign(
-    { "Content-Type": "application/json" },
-    init.headers || {},
-  );
-  if (app.currentUser?.id) headers["X-Figma-User"] = app.currentUser.id;
-  return fetch(API_BASE + path, Object.assign({}, init, { headers }));
-}
-
-// ── App state ──
-const app = {
-  view: "loading",
-  fileKey: null,
-  fileName: null,
-  currentUser: null,
-  slackConnected: false,
-  slackTeamId: null,
-  slackTeamName: null,
-  figmaConnected: false,
-  fileOption: "current",
-  channels: [],
-  configId: null,
-};
-
-// ── Figma plugin message bus ──
-const storageCallbacks = {};
-
-function getStorage(key) {
-  return new Promise((resolve) => {
-    storageCallbacks[key] = resolve;
-    parent.postMessage({ pluginMessage: { type: "get-storage", key } }, "*");
-  });
-}
-
-function setStorage(key, value) {
-  parent.postMessage({ pluginMessage: { type: "set-storage", key, value } }, "*");
-}
-
-function openUrl(url) {
-  parent.postMessage({ pluginMessage: { type: "open-url", url } }, "*");
-}
-
-function notify(message, error = false) {
-  parent.postMessage({ pluginMessage: { type: "notify", message, error } }, "*");
-}
-
-// ── Listen for messages from code.js ──
-onmessage = (event) => {
-  const msg = event.data.pluginMessage;
-  if (!msg) return;
-
-  switch (msg.type) {
-    case "init":
-      app.fileKey = msg.fileKey;
-      app.fileName = msg.fileName;
-      app.currentUser = msg.currentUser;
-      document.getElementById("current-file-name").textContent = msg.fileName || "Untitled";
-      document.getElementById("current-file-key").textContent = msg.fileKey || "—";
-      initialize();
-      break;
-
-    case "storage-result":
-      if (storageCallbacks[msg.key]) {
-        storageCallbacks[msg.key](msg.value);
-        delete storageCallbacks[msg.key];
+      // Convenience wrapper. Config calls carry a signed bearer session token (minted
+      // after Figma OAuth); the backend derives the user identity from it, so a
+      // spoofed header can't impersonate another user. The /api/auth/* endpoints
+      // don't need it (they take figmaUserId + state in the body).
+      async function api(path, init = {}) {
+        const headers = Object.assign({ "Content-Type": "application/json" }, init.headers || {});
+        if (app.sessionToken) headers["Authorization"] = `Bearer ${app.sessionToken}`;
+        return fetch(API_BASE + path, Object.assign({}, init, { headers }));
       }
-      break;
-  }
-};
 
-// ── Initialize ──
-async function initialize() {
-  // Check stored auth state
-  const slackData = await getStorage("slack_auth");
-  const figmaData = await getStorage("figma_auth");
-  const savedConfig = await getStorage("config_id");
+      // ── App state ──
+      const app = {
+        view: "loading",
+        initialized: false,
+        fileKey: null,
+        fileName: null,
+        currentUser: null,
+        slackConnected: false,
+        slackTeamId: null,
+        slackTeamName: null,
+        figmaConnected: false,
+        sessionToken: null,
+        fileOption: "current",
+        channels: [],
+        configId: null,
+      };
 
-  if (slackData) {
-    app.slackConnected = true;
-    app.slackTeamId = slackData.slack_team_id;
-    app.slackTeamName = slackData.slack_team_name;
-  }
+      // ── Figma plugin message bus ──
+      const storageCallbacks = {};
 
-  if (figmaData) {
-    app.figmaConnected = true;
-  }
-
-  if (savedConfig) {
-    // Load existing config from backend
-    try {
-      const res = await api(`/api/config?figmaUserId=${encodeURIComponent(app.currentUser?.id || "")}`);
-      const data = await res.json();
-      const config = data.configurations?.find((c) => c.id === savedConfig);
-      if (config && config.is_active) {
-        app.configId = config.id;
-        showDashboard(config);
-        return;
+      function getStorage(key) {
+        return new Promise((resolve) => {
+          storageCallbacks[key] = resolve;
+          parent.postMessage({ pluginMessage: { type: "get-storage", key } }, "*");
+        });
       }
-    } catch (e) {
-      console.warn("Failed to load config:", e);
-    }
-  }
 
-  // Show setup
-  updateSetupState();
-  showView("setup");
-}
+      function setStorage(key, value) {
+        parent.postMessage({ pluginMessage: { type: "set-storage", key, value } }, "*");
+      }
 
-// ── View management ──
-function showView(name) {
-  app.view = name;
-  document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
-  document.getElementById(`view-${name}`).classList.add("active");
-}
+      function openUrl(url) {
+        parent.postMessage({ pluginMessage: { type: "open-url", url } }, "*");
+      }
 
-// ── Setup state management ──
-function updateSetupState() {
-  const slackNum = document.getElementById("step-slack-num");
-  const figmaNum = document.getElementById("step-figma-num");
-  const configNum = document.getElementById("step-config-num");
-  const configForm = document.getElementById("config-form");
+      function notify(message, error = false) {
+        parent.postMessage({ pluginMessage: { type: "notify", message, error } }, "*");
+      }
 
-  // Slack step
-  if (app.slackConnected) {
-    slackNum.className = "step-num done";
-    slackNum.textContent = "✓";
-    document.getElementById("btn-connect-slack").textContent = `Connected to ${app.slackTeamName || "Slack"}`;
-    document.getElementById("btn-connect-slack").disabled = true;
+      // ── Listen for messages from code.js ──
+      onmessage = (event) => {
+        const msg = event.data.pluginMessage;
+        if (!msg) return;
 
-    // Enable Figma step
-    figmaNum.className = "step-num active";
-    document.getElementById("btn-connect-figma").disabled = false;
-  }
+        switch (msg.type) {
+          case "init":
+            app.fileKey = msg.fileKey;
+            app.fileName = msg.fileName;
+            app.currentUser = msg.currentUser;
+            document.getElementById("current-file-name").textContent = msg.fileName || "Untitled";
+            document.getElementById("current-file-key").textContent = msg.fileKey || "—";
+            initialize();
+            break;
 
-  // Figma step
-  if (app.figmaConnected) {
-    figmaNum.className = "step-num done";
-    figmaNum.textContent = "✓";
-    document.getElementById("btn-connect-figma").textContent = "Figma connected";
-    document.getElementById("btn-connect-figma").disabled = true;
+          case "storage-result":
+            if (storageCallbacks[msg.key]) {
+              storageCallbacks[msg.key](msg.value);
+              delete storageCallbacks[msg.key];
+            }
+            break;
+        }
+      };
 
-    // Enable config step
-    configNum.className = "step-num active";
-    configForm.style.opacity = "1";
-    configForm.style.pointerEvents = "auto";
-  }
+      // ── Initialize ──
+      async function initialize() {
+        // The init message may arrive more than once (proactive push + ui-ready
+        // reply); only run setup once.
+        if (app.initialized) return;
+        app.initialized = true;
 
-  updateSaveButton();
-}
+        // Check stored auth state
+        const slackData = await getStorage("slack_auth");
+        const figmaData = await getStorage("figma_auth");
+        const savedConfig = await getStorage("config_id");
 
-// ── Slack OAuth ──
-let pollTimer = null;
-
-async function connectSlack() {
-  const state = crypto.randomUUID();
-  const btn = document.getElementById("btn-connect-slack");
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Connecting…';
-
-  try {
-    const res = await api(`/api/auth/slack`, {
-      method: "POST",
-      body: JSON.stringify({ figmaUserId: app.currentUser?.id, state }),
-    });
-    const data = await res.json();
-    openUrl(data.url);
-
-    // Poll for completion
-    document.getElementById("slack-status").innerHTML =
-      '<span style="font-size:11px;color:var(--figma-color-text-secondary,#999);">Waiting for authorization… (check your browser)</span>';
-
-    pollTimer = setInterval(async () => {
-      try {
-        const statusRes = await api(`/api/auth-status?state=${state}`);
-        const statusData = await statusRes.json();
-
-        if (statusData.status === "completed") {
-          clearInterval(pollTimer);
+        if (slackData) {
           app.slackConnected = true;
-          app.slackTeamId = statusData.data.slack_team_id;
-          app.slackTeamName = statusData.data.slack_team_name;
-          setStorage("slack_auth", statusData.data);
-          document.getElementById("slack-status").innerHTML = "";
-          notify("Slack connected!");
-          updateSetupState();
-        } else if (statusData.status === "failed") {
-          clearInterval(pollTimer);
+          app.slackTeamId = slackData.slack_team_id;
+          app.slackTeamName = slackData.slack_team_name;
+        }
+
+        if (figmaData && figmaData.session_token) {
+          app.figmaConnected = true;
+          app.sessionToken = figmaData.session_token;
+        }
+
+        if (savedConfig && app.sessionToken) {
+          // Load existing config from backend. Identity comes from the bearer
+          // session token, so no user id needs to be sent.
+          try {
+            const res = await api(`/api/config`);
+            if (res.status === 401) {
+              // Stored session expired or invalid — drop it so the automatic Figma
+              // reconnect below kicks in instead of showing a stale "connected" state.
+              app.figmaConnected = false;
+              app.sessionToken = null;
+              setStorage("figma_auth", null);
+            } else {
+              const data = await readJson(res);
+              const config = (data.configurations || []).find((c) => c.id === savedConfig);
+              if (config && config.is_active) {
+                app.configId = config.id;
+                showDashboard(config);
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn("Failed to load config:", e);
+          }
+        }
+
+        // Show setup
+        updateSetupState();
+        showView("setup");
+
+        // Figma connects automatically (no manual step). If a valid session token is
+        // already stored we're done; otherwise start the one-time OAuth on open.
+        if (app.figmaConnected) {
+          markFigmaConnected();
+        } else {
+          startFigmaAuto();
+        }
+      }
+
+      // ── View management ──
+      function showView(name) {
+        app.view = name;
+        document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+        document.getElementById(`view-${name}`).classList.add("active");
+      }
+
+      // ── Setup state management ──
+      function updateSetupState() {
+        const slackNum = document.getElementById("step-slack-num");
+        const configNum = document.getElementById("step-config-num");
+        const configForm = document.getElementById("config-form");
+
+        // Step 1 — Slack
+        if (app.slackConnected) {
+          slackNum.className = "step-num done";
+          slackNum.textContent = "✓";
+          const slackBtn = document.getElementById("btn-connect-slack");
+          slackBtn.textContent = `Connected to ${app.slackTeamName || "Slack"}`;
+          slackBtn.disabled = true;
+        } else {
+          slackNum.className = "step-num active";
+          slackNum.textContent = "1";
+        }
+
+        // Step 2 — Configure unlocks once Slack is connected AND Figma has finished
+        // connecting automatically.
+        if (app.slackConnected && app.figmaConnected) {
+          configNum.className = "step-num active";
+          configForm.style.opacity = "1";
+          configForm.style.pointerEvents = "auto";
+        } else {
+          configNum.className = "step-num pending";
+          configForm.style.opacity = "0.5";
+          configForm.style.pointerEvents = "none";
+        }
+
+        updateSaveButton();
+      }
+
+      // ── Slack OAuth ──
+      let pollTimer = null;
+
+      // Generate a CSRF state nonce as a valid RFC-4122 v4 UUID.
+      //
+      // crypto.randomUUID() only exists in a secure context, which the Figma plugin
+      // iframe does NOT reliably provide (notably in the desktop app), so we must
+      // degrade gracefully. Critically, the fallback MUST still produce a real v4
+      // UUID: the backend validates `state` with assertUuid() on every OAuth
+      // endpoint. An earlier fallback returned a non-UUID string, so the initiate
+      // call was rejected with 400 (no `url`), and the UI then asked the sandbox to
+      // openExternal(undefined) — surfacing the misleading
+      // "error (open-url) missing or invalid url field". Keep the format valid here
+      // and that whole failure chain disappears.
+      function makeStateNonce() {
+        try {
+          if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+        } catch (_) {
+          /* fall through to manual construction */
+        }
+
+        // Gather 16 bytes of the best randomness available.
+        const bytes = new Array(16);
+        let filled = false;
+        try {
+          if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+            const b = new Uint8Array(16);
+            crypto.getRandomValues(b);
+            for (let i = 0; i < 16; i++) bytes[i] = b[i];
+            filled = true;
+          }
+        } catch (_) {
+          /* fall through to Math.random — fine for a CSRF nonce */
+        }
+        if (!filled) {
+          for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+        }
+
+        // Set the version (4) and variant (10xx) bits so the result is a valid v4.
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+        const hex = bytes.map((x) => x.toString(16).padStart(2, "0"));
+        return (
+          hex.slice(0, 4).join("") +
+          "-" +
+          hex.slice(4, 6).join("") +
+          "-" +
+          hex.slice(6, 8).join("") +
+          "-" +
+          hex.slice(8, 10).join("") +
+          "-" +
+          hex.slice(10, 16).join("")
+        );
+      }
+
+      // Set a status line's text safely (no innerHTML — plain text only).
+      function setStatus(elId, message, isError) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        el.replaceChildren();
+        if (!message) return;
+        const span = document.createElement("span");
+        span.style.fontSize = "11px";
+        span.style.color = isError ? "#cf222e" : "var(--figma-color-text-secondary,#999)";
+        span.textContent = message;
+        el.appendChild(span);
+      }
+
+      // Read a fetch Response as JSON without throwing on empty/non-JSON bodies.
+      async function readJson(res) {
+        try {
+          return await res.json();
+        } catch (_) {
+          return {};
+        }
+      }
+
+      async function connectSlack() {
+        const btn = document.getElementById("btn-connect-slack");
+        if (!app.currentUser || !app.currentUser.id) {
+          notify(
+            "Couldn't read your Figma account. Close and reopen the plugin, then try again.",
+            true,
+          );
+          return;
+        }
+        const state = makeStateNonce();
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Connecting…';
+
+        try {
+          const res = await api(`/api/auth/slack`, {
+            method: "POST",
+            body: JSON.stringify({ figmaUserId: app.currentUser?.id, state }),
+          });
+          const data = await readJson(res);
+          if (!res.ok || !data.url) {
+            // Surface the backend's actual error rather than asking the sandbox to
+            // open an undefined URL (which produced the confusing "open-url" error).
+            throw new Error(
+              data.error || `Couldn't start Slack authorization (HTTP ${res.status}).`,
+            );
+          }
+          openUrl(data.url);
+
+          // Poll for completion
+          setStatus("slack-status", "Waiting for authorization… (check your browser)", false);
+
+          pollTimer = setInterval(async () => {
+            try {
+              const statusRes = await api(`/api/auth-status?state=${state}`);
+              const statusData = await statusRes.json();
+
+              if (statusData.status === "completed") {
+                clearInterval(pollTimer);
+                app.slackConnected = true;
+                app.slackTeamId = statusData.data.slack_team_id;
+                app.slackTeamName = statusData.data.slack_team_name;
+                setStorage("slack_auth", statusData.data);
+                document.getElementById("slack-status").innerHTML = "";
+                notify("Slack connected!");
+                updateSetupState();
+              } else if (statusData.status === "failed") {
+                clearInterval(pollTimer);
+                btn.disabled = false;
+                btn.textContent = "Connect to Slack";
+                setStatus("slack-status", "Authorization failed. Try again.", true);
+              }
+            } catch (e) {
+              // Polling error — keep trying
+            }
+          }, 2000);
+
+          // Timeout after 3 minutes
+          setTimeout(() => {
+            if (pollTimer) {
+              clearInterval(pollTimer);
+              btn.disabled = false;
+              btn.textContent = "Connect to Slack";
+              setStatus("slack-status", "Timed out. Please try again.", true);
+            }
+          }, 180000);
+        } catch (e) {
           btn.disabled = false;
           btn.textContent = "Connect to Slack";
-          document.getElementById("slack-status").innerHTML =
-            '<span style="color:#cf222e;font-size:11px;">Authorization failed. Try again.</span>';
+          setStatus(
+            "slack-status",
+            e && e.message ? e.message : "Connection error. Check your network.",
+            true,
+          );
         }
-      } catch (e) {
-        // Polling error — keep trying
       }
-    }, 2000);
 
-    // Timeout after 3 minutes
-    setTimeout(() => {
-      if (pollTimer) {
-        clearInterval(pollTimer);
-        btn.disabled = false;
-        btn.textContent = "Connect to Slack";
-        document.getElementById("slack-status").innerHTML =
-          '<span style="color:#cf222e;font-size:11px;">Timed out. Please try again.</span>';
+      // ── Figma OAuth (automatic on open) ──
+      //
+      // A Figma plugin sandbox can read WHO you are (figma.currentUser) but cannot
+      // obtain a Figma API token. Registering the LIBRARY_PUBLISH webhook needs an
+      // OAuth token with webhooks:write, so a one-time browser authorization is
+      // unavoidable. We start it automatically instead of making it a manual step;
+      // once done, the signed session token is stored and this never runs again.
+      let figmaPollTimer = null;
+
+      function makeSpinner() {
+        const s = document.createElement("span");
+        s.className = "spinner";
+        s.style.width = "12px";
+        s.style.height = "12px";
+        s.style.borderWidth = "2px";
+        return s;
       }
-    }, 180000);
-  } catch (e) {
-    btn.disabled = false;
-    btn.textContent = "Connect to Slack";
-    document.getElementById("slack-status").innerHTML =
-      '<span style="color:#cf222e;font-size:11px;">Connection error. Check your network.</span>';
-  }
-}
 
-// ── Figma OAuth ──
-async function connectFigma() {
-  const state = crypto.randomUUID();
-  const btn = document.getElementById("btn-connect-figma");
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Connecting…';
+      function markFigmaConnected() {
+        app.figmaConnected = true;
+        const icon = document.getElementById("figma-banner-icon");
+        icon.className = "step-num done";
+        icon.textContent = "✓";
+        const name = app.currentUser && app.currentUser.name;
+        document.getElementById("figma-banner-title").textContent = name
+          ? `Figma connected as ${name}`
+          : "Figma connected";
+        document.getElementById("figma-banner-desc").textContent =
+          "We'll watch your selected file and notify Slack when it's published.";
+        document.getElementById("btn-figma-retry").style.display = "none";
+        updateSetupState();
+      }
 
-  try {
-    const res = await api(`/api/auth/figma`, {
-      method: "POST",
-      body: JSON.stringify({ figmaUserId: app.currentUser?.id, state }),
-    });
-    const data = await res.json();
-    openUrl(data.url);
+      function figmaBannerError(message) {
+        const icon = document.getElementById("figma-banner-icon");
+        icon.className = "step-num pending";
+        icon.textContent = "!";
+        document.getElementById("figma-banner-title").textContent = "Couldn't connect Figma";
+        document.getElementById("figma-banner-desc").textContent = message;
+        document.getElementById("btn-figma-retry").style.display = "inline-flex";
+      }
 
-    document.getElementById("figma-status").innerHTML =
-      '<span style="font-size:11px;color:var(--figma-color-text-secondary,#999);">Waiting for authorization…</span>';
+      async function startFigmaAuto() {
+        if (app.figmaConnected) {
+          markFigmaConnected();
+          return;
+        }
+        if (!app.currentUser || !app.currentUser.id) {
+          figmaBannerError("Couldn't read your Figma account. Reopen the plugin to try again.");
+          return;
+        }
 
-    const fPoll = setInterval(async () => {
-      try {
-        const statusRes = await api(`/api/auth-status?state=${state}`);
-        const statusData = await statusRes.json();
+        // Reset banner to the in-progress state.
+        const icon = document.getElementById("figma-banner-icon");
+        icon.className = "step-num active";
+        icon.replaceChildren(makeSpinner());
+        document.getElementById("figma-banner-title").textContent =
+          "Connecting your Figma account…";
+        document.getElementById("figma-banner-desc").textContent =
+          "A browser tab will open once to confirm access — no need to sign in again.";
+        document.getElementById("btn-figma-retry").style.display = "none";
 
-        if (statusData.status === "completed") {
-          clearInterval(fPoll);
-          app.figmaConnected = true;
-          setStorage("figma_auth", { connected: true });
-          document.getElementById("figma-status").innerHTML = "";
-          notify("Figma connected!");
-          updateSetupState();
-        } else if (statusData.status === "failed") {
-          clearInterval(fPoll);
+        const state = makeStateNonce();
+        try {
+          const res = await api(`/api/auth/figma`, {
+            method: "POST",
+            body: JSON.stringify({ figmaUserId: app.currentUser.id, state }),
+          });
+          const data = await readJson(res);
+          if (!res.ok || !data.url) {
+            throw new Error(
+              data.error || `Couldn't start Figma authorization (HTTP ${res.status}).`,
+            );
+          }
+          openUrl(data.url);
+
+          if (figmaPollTimer) clearInterval(figmaPollTimer);
+          figmaPollTimer = setInterval(async () => {
+            try {
+              const statusRes = await api(`/api/auth-status?state=${state}`);
+              const statusData = await readJson(statusRes);
+
+              if (statusData.status === "completed") {
+                clearInterval(figmaPollTimer);
+                figmaPollTimer = null;
+                app.sessionToken = statusData.data.session_token;
+                setStorage("figma_auth", statusData.data);
+                markFigmaConnected();
+                notify("Figma connected!");
+              } else if (statusData.status === "failed") {
+                clearInterval(figmaPollTimer);
+                figmaPollTimer = null;
+                figmaBannerError("Figma authorization failed. Tap Retry to try again.");
+              }
+            } catch (e) {
+              // Transient polling error — keep trying.
+            }
+          }, 2000);
+
+          setTimeout(() => {
+            if (figmaPollTimer) {
+              clearInterval(figmaPollTimer);
+              figmaPollTimer = null;
+              if (!app.figmaConnected)
+                figmaBannerError("Figma authorization timed out. Tap Retry.");
+            }
+          }, 180000);
+        } catch (e) {
+          figmaBannerError(e && e.message ? e.message : "Connection error. Check your network.");
+        }
+      }
+
+      // ── File selection ──
+      function selectFileOption(option) {
+        app.fileOption = option;
+        document.getElementById("opt-current").classList.toggle("selected", option === "current");
+        document.getElementById("opt-manual").classList.toggle("selected", option === "manual");
+        document.getElementById("manual-input-wrap").style.display =
+          option === "manual" ? "block" : "none";
+        updateSaveButton();
+      }
+
+      // ── Channel management ──
+      function addChannel() {
+        const input = document.getElementById("input-channel");
+        const val = input.value.trim();
+        if (!val) return;
+        if (!SLACK_CHANNEL_ID_RE.test(val)) {
+          notify("Invalid Slack channel ID (expected C…, G…, D…, or MP…)", true);
+          return;
+        }
+        if (app.channels.length >= 3) {
+          notify("Maximum 3 channels allowed", true);
+          return;
+        }
+        if (app.channels.some((c) => c.id === val)) {
+          notify("Channel already added", true);
+          return;
+        }
+        app.channels.push({ id: val, name: `#${val}` });
+        input.value = "";
+        renderChannels();
+        updateSaveButton();
+      }
+
+      function removeChannel(id) {
+        app.channels = app.channels.filter((c) => c.id !== id);
+        renderChannels();
+        updateSaveButton();
+      }
+
+      function renderChannels() {
+        // Build pills with the DOM API — never interpolate channel IDs into
+        // innerHTML. A malicious / mistyped channel ID containing `'` or `<`
+        // would otherwise become an XSS sink via the onclick attribute.
+        const list = document.getElementById("channels-list");
+        list.replaceChildren();
+        app.channels.forEach((c) => {
+          const pill = document.createElement("span");
+          pill.className = "channel-pill";
+          pill.textContent = c.id;
+          const remove = document.createElement("span");
+          remove.className = "remove";
+          remove.textContent = "×";
+          remove.title = "Remove channel";
+          remove.addEventListener("click", () => removeChannel(c.id));
+          pill.appendChild(remove);
+          list.appendChild(pill);
+        });
+
+        // Hide add row if 3 channels
+        document.getElementById("channel-add-row").style.display =
+          app.channels.length >= 3 ? "none" : "flex";
+      }
+
+      // Allow pressing Enter to add channel
+      document.addEventListener("DOMContentLoaded", () => {
+        const input = document.getElementById("input-channel");
+        if (input) {
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") addChannel();
+          });
+        }
+        const fileInput = document.getElementById("input-file-id");
+        if (fileInput) {
+          fileInput.addEventListener("input", () => updateSaveButton());
+        }
+      });
+
+      // ── Save button state ──
+      function updateSaveButton() {
+        const btn = document.getElementById("btn-save");
+        if (!btn) return;
+
+        const hasFile =
+          app.fileOption === "current"
+            ? !!app.fileKey
+            : !!document.getElementById("input-file-id")?.value.trim();
+        const hasChannels = app.channels.length >= 1;
+
+        btn.disabled = !(hasFile && hasChannels && app.slackConnected && app.figmaConnected);
+      }
+
+      // ── Extract file key from URL or raw key ──
+      function parseFileKey(input) {
+        const trimmed = input.trim();
+        // Match figma.com/file/KEY/... or figma.com/design/KEY/...
+        const urlMatch = trimmed.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)/);
+        if (urlMatch) return urlMatch[1];
+        // Assume it's a raw key
+        return trimmed;
+      }
+
+      // ── Save configuration ──
+      async function saveConfig() {
+        const btn = document.getElementById("btn-save");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Saving…';
+
+        const fileKey =
+          app.fileOption === "current"
+            ? app.fileKey
+            : parseFileKey(document.getElementById("input-file-id").value);
+        const fileName =
+          app.fileOption === "current"
+            ? app.fileName
+            : document.getElementById("input-file-name").value.trim() || null;
+
+        try {
+          const res = await api(`/api/config`, {
+            method: "POST",
+            body: JSON.stringify({
+              figmaUserId: app.currentUser?.id,
+              fileKey,
+              fileName,
+              slackTeamId: app.slackTeamId,
+              channels: app.channels,
+            }),
+          });
+
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Save failed");
+          }
+
+          const config = await res.json();
+          app.configId = config.id;
+          setStorage("config_id", config.id);
+
+          notify("Configuration saved! Notifications are active.");
+          showDashboard(config);
+        } catch (e) {
           btn.disabled = false;
-          btn.textContent = "Connect Figma Account";
-          document.getElementById("figma-status").innerHTML =
-            '<span style="color:#cf222e;font-size:11px;">Authorization failed.</span>';
+          btn.textContent = "Save & Activate";
+          notify(e.message, true);
         }
-      } catch (e) { /* retry */ }
-    }, 2000);
-
-    setTimeout(() => {
-      clearInterval(fPoll);
-      if (!app.figmaConnected) {
-        btn.disabled = false;
-        btn.textContent = "Connect Figma Account";
-        document.getElementById("figma-status").innerHTML =
-          '<span style="color:#cf222e;font-size:11px;">Timed out.</span>';
       }
-    }, 180000);
-  } catch (e) {
-    btn.disabled = false;
-    btn.textContent = "Connect Figma Account";
-    document.getElementById("figma-status").innerHTML =
-      '<span style="color:#cf222e;font-size:11px;">Connection error.</span>';
-  }
-}
 
-// ── File selection ──
-function selectFileOption(option) {
-  app.fileOption = option;
-  document.getElementById("opt-current").classList.toggle("selected", option === "current");
-  document.getElementById("opt-manual").classList.toggle("selected", option === "manual");
-  document.getElementById("manual-input-wrap").style.display = option === "manual" ? "block" : "none";
-  updateSaveButton();
-}
+      // ── Dashboard ──
+      function showDashboard(config) {
+        document.getElementById("dash-file-name").textContent =
+          config.figma_file_name || config.figma_file_key;
+        document.getElementById("dash-file-key").textContent = config.figma_file_key;
+        document.getElementById("dash-slack-workspace").textContent =
+          config.slack_installations?.slack_team_name || app.slackTeamName || config.slack_team_id;
+        document.getElementById("dash-channels").textContent = (config.channels || [])
+          .map((c) => c.id || c)
+          .join(", ");
+        document.getElementById("dash-webhook-status").textContent =
+          config.webhookStatus === "registered"
+            ? "Registered (new)"
+            : config.webhookStatus === "existing"
+              ? "Active"
+              : config.webhookStatus || "Active";
 
-// ── Channel management ──
-function addChannel() {
-  const input = document.getElementById("input-channel");
-  const val = input.value.trim();
-  if (!val) return;
-  if (!SLACK_CHANNEL_ID_RE.test(val)) {
-    notify("Invalid Slack channel ID (expected C…, G…, D…, or MP…)", true);
-    return;
-  }
-  if (app.channels.length >= 3) {
-    notify("Maximum 3 channels allowed", true);
-    return;
-  }
-  if (app.channels.some((c) => c.id === val)) {
-    notify("Channel already added", true);
-    return;
-  }
-  app.channels.push({ id: val, name: `#${val}` });
-  input.value = "";
-  renderChannels();
-  updateSaveButton();
-}
+        const badge = document.getElementById("dash-status-badge");
+        if (config.is_active === false) {
+          badge.textContent = "Paused";
+          badge.className = "badge badge-warning";
+        } else {
+          badge.textContent = "Active";
+          badge.className = "badge badge-success";
+        }
 
-function removeChannel(id) {
-  app.channels = app.channels.filter((c) => c.id !== id);
-  renderChannels();
-  updateSaveButton();
-}
+        showView("dashboard");
+      }
 
-function renderChannels() {
-  // Build pills with the DOM API — never interpolate channel IDs into
-  // innerHTML. A malicious / mistyped channel ID containing `'` or `<`
-  // would otherwise become an XSS sink via the onclick attribute.
-  const list = document.getElementById("channels-list");
-  list.replaceChildren();
-  app.channels.forEach((c) => {
-    const pill = document.createElement("span");
-    pill.className = "channel-pill";
-    pill.textContent = c.id;
-    const remove = document.createElement("span");
-    remove.className = "remove";
-    remove.textContent = "×";
-    remove.title = "Remove channel";
-    remove.addEventListener("click", () => removeChannel(c.id));
-    pill.appendChild(remove);
-    list.appendChild(pill);
-  });
+      function editConfig() {
+        // Go back to setup with existing values pre-filled. Slack + Figma stay
+        // connected, so no re-auth is needed.
+        app.channels = [];
+        showView("setup");
+        if (app.figmaConnected) markFigmaConnected();
+        updateSetupState();
+        renderChannels();
+      }
 
-  // Hide add row if 3 channels
-  document.getElementById("channel-add-row").style.display =
-    app.channels.length >= 3 ? "none" : "flex";
-}
+      async function deleteConfig() {
+        if (!app.configId) return;
 
-// Allow pressing Enter to add channel
-document.addEventListener("DOMContentLoaded", () => {
-  const input = document.getElementById("input-channel");
-  if (input) {
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") addChannel();
-    });
-  }
-  const fileInput = document.getElementById("input-file-id");
-  if (fileInput) {
-    fileInput.addEventListener("input", () => updateSaveButton());
-  }
-  const teamInput = document.getElementById("input-team-id");
-  if (teamInput) {
-    teamInput.addEventListener("input", () => updateSaveButton());
-  }
-});
+        try {
+          await api(`/api/config?id=${encodeURIComponent(app.configId)}`, { method: "DELETE" });
+          setStorage("config_id", null);
+          app.configId = null;
+          app.channels = [];
+          notify("Configuration removed.");
 
-// ── Save button state ──
-function updateSaveButton() {
-  const btn = document.getElementById("btn-save");
-  if (!btn) return;
+          // Removing a notification config does NOT disconnect the user's accounts —
+          // keep Slack + Figma connected and just return to the configure step. This
+          // also avoids surprising the user with an automatic OAuth tab on removal.
+          showView("setup");
+          if (app.figmaConnected) markFigmaConnected();
+          else startFigmaAuto();
+          updateSetupState();
+          renderChannels();
+        } catch (e) {
+          notify("Failed to delete configuration", true);
+        }
+      }
 
-  const hasFile =
-    app.fileOption === "current"
-      ? !!app.fileKey
-      : !!document.getElementById("input-file-id")?.value.trim();
-  const hasTeamId = !!document.getElementById("input-team-id")?.value.trim();
-  const hasChannels = app.channels.length >= 1;
-  const bothConnected = app.slackConnected && app.figmaConnected;
-
-  btn.disabled = !(hasFile && hasTeamId && hasChannels && bothConnected);
-}
-
-// ── Extract file key from URL or raw key ──
-function parseFileKey(input) {
-  const trimmed = input.trim();
-  // Match figma.com/file/KEY/... or figma.com/design/KEY/...
-  const urlMatch = trimmed.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)/);
-  if (urlMatch) return urlMatch[1];
-  // Assume it's a raw key
-  return trimmed;
-}
-
-// ── Save configuration ──
-async function saveConfig() {
-  const btn = document.getElementById("btn-save");
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Saving…';
-
-  const fileKey =
-    app.fileOption === "current"
-      ? app.fileKey
-      : parseFileKey(document.getElementById("input-file-id").value);
-  const fileName =
-    app.fileOption === "current"
-      ? app.fileName
-      : document.getElementById("input-file-name").value.trim() || null;
-  const teamId = document.getElementById("input-team-id").value.trim();
-
-  try {
-    const res = await api(`/api/config`, {
-      method: "POST",
-      body: JSON.stringify({
-        figmaUserId: app.currentUser?.id,
-        figmaTeamId: teamId,
-        fileKey,
-        fileName,
-        slackTeamId: app.slackTeamId,
-        channels: app.channels,
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "Save failed");
-    }
-
-    const config = await res.json();
-    app.configId = config.id;
-    setStorage("config_id", config.id);
-
-    notify("Configuration saved! Notifications are active.");
-    showDashboard(config);
-  } catch (e) {
-    btn.disabled = false;
-    btn.textContent = "Save & Activate";
-    notify(e.message, true);
-  }
-}
-
-// ── Dashboard ──
-function showDashboard(config) {
-  document.getElementById("dash-file-name").textContent =
-    config.figma_file_name || config.figma_file_key;
-  document.getElementById("dash-file-key").textContent = config.figma_file_key;
-  document.getElementById("dash-slack-workspace").textContent =
-    config.slack_installations?.slack_team_name || app.slackTeamName || config.slack_team_id;
-  document.getElementById("dash-channels").textContent = (config.channels || [])
-    .map((c) => c.id || c)
-    .join(", ");
-  document.getElementById("dash-webhook-status").textContent =
-    config.webhookStatus === "registered"
-      ? "Registered (new)"
-      : config.webhookStatus === "existing"
-      ? "Active"
-      : config.webhookStatus || "Active";
-
-  const badge = document.getElementById("dash-status-badge");
-  if (config.is_active === false) {
-    badge.textContent = "Paused";
-    badge.className = "badge badge-warning";
-  } else {
-    badge.textContent = "Active";
-    badge.className = "badge badge-success";
-  }
-
-  showView("dashboard");
-}
-
-function editConfig() {
-  // Go back to setup with existing values pre-filled
-  app.channels = [];
-  showView("setup");
-  updateSetupState();
-}
-
-async function deleteConfig() {
-  if (!app.configId) return;
-
-  try {
-    await api(`/api/config?id=${encodeURIComponent(app.configId)}`, { method: "DELETE" });
-    setStorage("config_id", null);
-    setStorage("slack_auth", null);
-    setStorage("figma_auth", null);
-    app.configId = null;
-    app.slackConnected = false;
-    app.figmaConnected = false;
-    app.channels = [];
-    notify("Configuration removed.");
-    showView("setup");
-    // Reset UI
-    document.getElementById("step-slack-num").className = "step-num active";
-    document.getElementById("step-slack-num").textContent = "1";
-    document.getElementById("btn-connect-slack").disabled = false;
-    document.getElementById("btn-connect-slack").textContent = "Connect to Slack";
-    document.getElementById("step-figma-num").className = "step-num pending";
-    document.getElementById("step-figma-num").textContent = "2";
-    document.getElementById("btn-connect-figma").disabled = true;
-    document.getElementById("btn-connect-figma").innerHTML = "Connect Figma Account";
-    document.getElementById("step-config-num").className = "step-num pending";
-    document.getElementById("step-config-num").textContent = "3";
-    document.getElementById("config-form").style.opacity = "0.5";
-    document.getElementById("config-form").style.pointerEvents = "none";
-    renderChannels();
-  } catch (e) {
-    notify("Failed to delete configuration", true);
-  }
-}
-</script>
-</body>
+      // Handshake: tell the sandbox the UI is loaded and listening, so it re-sends
+      // the init context even if its first (proactive) push arrived too early.
+      parent.postMessage({ pluginMessage: { type: "ui-ready" } }, "*");
+    </script>
+  </body>
 </html>

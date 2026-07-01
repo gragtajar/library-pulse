@@ -1,5 +1,5 @@
 // @ts-check
-/* global figma, __html__ */
+/// <reference types="@figma/plugin-typings" />
 /**
  * Library Pulse — Figma plugin sandbox.
  *
@@ -17,6 +17,7 @@
 
 // Strict allow-lists for UI → sandbox messages.
 const ALLOWED_UI_MESSAGE_TYPES = new Set([
+  "ui-ready",
   "close",
   "get-storage",
   "set-storage",
@@ -32,19 +33,25 @@ const STORAGE_PREFIX = "lp/v1/";
 // Hard cap so a runaway UI can't fill clientStorage (5 MB total per plugin).
 const MAX_STORAGE_VALUE_BYTES = 200 * 1024;
 
-figma.showUI(__html__, { width: 420, height: 580, themeColors: true });
-
-// Initial context push to the UI.
-figma.ui.postMessage({
+// The context we push to the UI. Built once, sent both proactively and again
+// when the UI says it's ready — see below.
+const INIT_PAYLOAD = {
   type: "init",
-  fileKey: figma.fileKey ?? null,
-  fileName: figma.root?.name ?? "",
+  fileKey: figma.fileKey != null ? figma.fileKey : null,
+  fileName: figma.root && figma.root.name ? figma.root.name : "",
   currentUser: figma.currentUser
     ? { id: figma.currentUser.id, name: figma.currentUser.name }
     : null,
-});
+};
 
-figma.ui.onmessage = async (msg) => {
+figma.showUI(__html__, { width: 420, height: 600, themeColors: true });
+
+// Proactive push. This can race the UI before its message listener is attached
+// (a known Figma gotcha that left the UI stuck on "Loading…"), so the UI also
+// sends a "ui-ready" message and we re-send INIT_PAYLOAD in response.
+figma.ui.postMessage(INIT_PAYLOAD);
+
+figma.ui.onmessage = async (/** @type {any} */ msg) => {
   if (!msg || typeof msg !== "object" || typeof msg.type !== "string") {
     figma.notify("Library Pulse: malformed UI message", { error: true });
     return;
@@ -56,6 +63,11 @@ figma.ui.onmessage = async (msg) => {
 
   await safe(msg.type, async () => {
     switch (msg.type) {
+      case "ui-ready":
+        // The UI finished loading and attached its listener — (re)send context.
+        figma.ui.postMessage(INIT_PAYLOAD);
+        return;
+
       case "close":
         figma.closePlugin();
         return;
@@ -66,20 +78,20 @@ figma.ui.onmessage = async (msg) => {
         figma.ui.postMessage({
           type: "storage-result",
           key: msg.key,
-          value: value ?? null,
+          value: value != null ? value : null,
         });
         return;
       }
 
       case "set-storage": {
         const key = scopedKey(requireString(msg.key, "key"));
-        const valueStr = JSON.stringify(msg.value ?? null);
+        const valueStr = JSON.stringify(msg.value != null ? msg.value : null);
         if (valueStr.length > MAX_STORAGE_VALUE_BYTES) {
           throw new Error(
             `Storage value for "${msg.key}" exceeds ${MAX_STORAGE_VALUE_BYTES} bytes`,
           );
         }
-        await figma.clientStorage.setAsync(key, msg.value ?? null);
+        await figma.clientStorage.setAsync(key, msg.value != null ? msg.value : null);
         figma.ui.postMessage({ type: "storage-saved", key: msg.key });
         return;
       }

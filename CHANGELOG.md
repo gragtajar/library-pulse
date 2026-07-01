@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **"error (open-url) missing or invalid url field" on Connect Slack.** In the
+  Figma desktop app the plugin iframe isn't a secure context, so
+  `crypto.randomUUID()` is unavailable and the CSRF-state fallback produced a
+  non-UUID string. The backend rejected it with `400` (no `url`), and the UI
+  then asked the sandbox to `openExternal(undefined)`. `makeStateNonce()` now
+  always returns a valid RFC-4122 v4 UUID, and the UI surfaces the backend's
+  actual error instead of blindly opening `data.url`. (`figma-plugin/ui.html`)
+
+### Changed
+
+- **Figma connects automatically — no manual "Connect Figma" step.** The plugin
+  reads the logged-in user from `figma.currentUser` and, on open, starts the
+  one-time Figma authorization automatically (a banner replaces the old
+  button). Returning users with a stored session token skip it entirely; an
+  expired session auto-reconnects. Note: a browser authorization is still
+  required once because a Figma plugin sandbox cannot obtain a `webhooks:write`
+  token itself — identity stays cryptographically proven (session minted from
+  real OAuth), so there is no security regression. Removing a config no longer
+  disconnects the user's Slack/Figma accounts. (`figma-plugin/ui.html`)
+
 ### Security
 
 - **OAuth callback XSS fixed.** Previously the `?error=` query string was
