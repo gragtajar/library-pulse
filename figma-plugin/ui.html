@@ -656,10 +656,14 @@
         if (app.initialized) return;
         app.initialized = true;
 
-        // Check stored auth state
-        const slackData = await getStorage("slack_auth");
-        const figmaData = await getStorage("figma_auth");
-        const savedConfig = await getStorage("config_id");
+        // Check stored auth state. Read all three in parallel — these are
+        // postMessage round-trips to the sandbox; doing them sequentially added
+        // three hops of latency before the Figma tab could open.
+        const [slackData, figmaData, savedConfig] = await Promise.all([
+          getStorage("slack_auth"),
+          getStorage("figma_auth"),
+          getStorage("config_id"),
+        ]);
 
         if (slackData) {
           app.slackConnected = true;
@@ -882,7 +886,7 @@
             } catch (e) {
               // Polling error — keep trying
             }
-          }, 2000);
+          }, 500);
 
           // Timeout after 3 minutes
           setTimeout(() => {
@@ -1001,7 +1005,7 @@
             } catch (e) {
               // Transient polling error — keep trying.
             }
-          }, 2000);
+          }, 500);
 
           setTimeout(() => {
             if (figmaPollTimer) {

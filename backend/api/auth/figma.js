@@ -12,7 +12,15 @@ import { logger } from "../../lib/logger.js";
 import { assertFigmaUserId, assertUuid } from "../../lib/validators.js";
 import { ValidationError } from "../../lib/errors.js";
 
-const SCOPES = "files:read,webhooks:write";
+// The backend only ever calls the Figma webhooks API (register + delete), so
+// `webhooks:write` is the sole scope required. Two earlier problems are both
+// avoided by using a single scope: (1) Figma's OAuth follows the OAuth2 spec
+// where the `scope` param is SPACE-delimited, but the old value was
+// comma-joined ("files:read,webhooks:write"), which Figma parsed as one
+// invalid scope → "Invalid scopes for app"; (2) files:read was never used
+// (least privilege). If multiple scopes are ever needed, join them with a
+// SPACE, not a comma.
+const SCOPES = "webhooks:write";
 
 export default withErrorHandling(
   /**
