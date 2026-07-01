@@ -676,18 +676,20 @@
           app.sessionToken = figmaData.session_token;
         }
 
-        if (savedConfig && app.sessionToken) {
-          // Load existing config from backend. Identity comes from the bearer
-          // session token, so no user id needs to be sent.
+        // If a Figma session token is already stored, validate it with a cheap
+        // authenticated call BEFORE deciding whether to auto-connect. This is
+        // what makes the "already connected" case correct: a still-valid session
+        // shows the connected banner and does NOT reopen the OAuth tab, while an
+        // expired/invalid one is cleared so auto-connect can re-run.
+        if (app.sessionToken) {
           try {
             const res = await api(`/api/config`);
             if (res.status === 401) {
-              // Stored session expired or invalid — drop it so the automatic Figma
-              // reconnect below kicks in instead of showing a stale "connected" state.
               app.figmaConnected = false;
               app.sessionToken = null;
               setStorage("figma_auth", null);
-            } else {
+            } else if (savedConfig) {
+              // Session is valid AND we saved a config before → jump to dashboard.
               const data = await readJson(res);
               const config = (data.configurations || []).find((c) => c.id === savedConfig);
               if (config && config.is_active) {
@@ -697,7 +699,9 @@
               }
             }
           } catch (e) {
-            console.warn("Failed to load config:", e);
+            // Network hiccup — keep the stored session and show "connected"
+            // optimistically rather than forcing a needless re-auth.
+            console.warn("Session validation skipped (network):", e);
           }
         }
 
@@ -705,8 +709,9 @@
         updateSetupState();
         showView("setup");
 
-        // Figma connects automatically (no manual step). If a valid session token is
-        // already stored we're done; otherwise start the one-time OAuth on open.
+        // Auto-connect on open — but only when NOT already connected. A valid
+        // stored session shows "Figma connected as …" with no re-prompt;
+        // otherwise start the one-time OAuth.
         if (app.figmaConnected) {
           markFigmaConnected();
         } else {
