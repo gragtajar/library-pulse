@@ -1228,5 +1228,15 @@
       // the init context even if its first (proactive) push arrived too early.
       parent.postMessage({ pluginMessage: { type: "ui-ready" } }, "*");
     </script>
+
+    <!-- Vercel Speed Insights -->
+    <script>
+      window.si =
+        window.si ||
+        function () {
+          (window.siq = window.siq || []).push(arguments);
+        };
+    </script>
+    <script defer src="/_vercel/speed-insights/script.js"></script>
   </body>
 </html>
