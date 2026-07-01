@@ -4,7 +4,7 @@ Welcome — quick guide to getting set up and shipping changes that survive revi
 
 ## Prerequisites
 
-- Node 20+ (`.nvmrc` pins the major version — `nvm use` if you have nvm)
+- Node 22+ (`.nvmrc` pins the major version — `nvm use` if you have nvm)
 - npm 10+
 - `vercel` CLI (only if you want to run `npm run dev` in `backend/`)
 - A Supabase project (free tier works) for local backend runs

@@ -10,6 +10,11 @@ permissions:
 jobs:
   dependency-review:
     runs-on: ubuntu-latest
+    # Advisory until the repo's Dependency graph is enabled
+    # (Settings → Code security → Dependency graph). Without it the action
+    # hard-errors; continue-on-error keeps it from blocking PRs. Once enabled,
+    # remove this line to make high-severity findings block again.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Dependency review

@@ -89,15 +89,7 @@ export default [
     },
     rules: {
       "n/no-missing-import": "off", // Vercel/esbuild handles resolution
-      "n/no-unsupported-features/node-builtins": [
-        "error",
-        {
-          version: ">=20.0.0",
-          // Available on Vercel's Node 20 runtime; the rule is conservative
-          // about their "experimental until 21" status.
-          ignores: ["fetch", "AbortSignal", "AbortSignal.timeout"],
-        },
-      ],
+      "n/no-unsupported-features/node-builtins": ["error", { version: ">=22.0.0" }],
       "n/no-process-exit": "error",
       "n/no-deprecated-api": "error",
       "no-console": "error", // structured logger only, no console.log/info

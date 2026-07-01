@@ -53,7 +53,7 @@ The system has **three runtimes** with disjoint trust models:
 
 2. **Figma plugin UI iframe** (`figma-plugin/ui.html`) — a `srcdoc` iframe rendered by Figma. Has DOM and `fetch`, but origin is `null`. The only network destinations it can reach are the ones listed in `manifest.json`'s `networkAccess.allowedDomains`.
 
-3. **Vercel serverless backend** (`backend/api/*.js`) — Node 20 ESM. Holds the Slack/Figma client secrets and the AES encryption key. Talks to Supabase and to upstream Slack/Figma APIs.
+3. **Vercel serverless backend** (`backend/api/*.js`) — Node 22 ESM. Holds the Slack/Figma client secrets and the AES encryption key. Talks to Supabase and to upstream Slack/Figma APIs.
 
 The end-user browser is involved only during OAuth — it never sees an API call from the plugin.
 
