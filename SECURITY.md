@@ -17,15 +17,15 @@ We aim to acknowledge within **48 hours** and to ship a fix within **14 days** f
 
 ## Threat model summary
 
-| Asset | What protects it |
-|---|---|
-| Slack bot tokens | AES-256-GCM at rest with auth-tag verification; only the service-role key can read them; never logged |
-| Figma OAuth tokens | Same as above |
-| `ENCRYPTION_KEY` | Vercel environment variable, encrypted at rest by Vercel; never committed; rotation procedure in `docs/runbooks/rotate-encryption-key.md` |
-| Webhook authenticity | Hard-required `X-Figma-Passcode` header, timing-safe compare against per-team passcode |
-| OAuth replay | `auth_sessions.used_at` is set on first consumption; subsequent callbacks 403 |
-| Webhook replay | `webhook_events.event_key UNIQUE` constraint; Figma retries are silently de-duped |
-| Cross-user enumeration | Backend requires `X-Figma-User` header and compares to row's `figma_user_id` |
+| Asset                  | What protects it                                                                                                                          |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Slack bot tokens       | AES-256-GCM at rest with auth-tag verification; only the service-role key can read them; never logged                                     |
+| Figma OAuth tokens     | Same as above                                                                                                                             |
+| `ENCRYPTION_KEY`       | Vercel environment variable, encrypted at rest by Vercel; never committed; rotation procedure in `docs/runbooks/rotate-encryption-key.md` |
+| Webhook authenticity   | Hard-required `X-Figma-Passcode` header, timing-safe compare against per-team passcode                                                    |
+| OAuth replay           | `auth_sessions.used_at` is set on first consumption; subsequent callbacks 403                                                             |
+| Webhook replay         | `webhook_events.event_key UNIQUE` constraint; Figma retries are silently de-duped                                                         |
+| Cross-user enumeration | Backend requires `X-Figma-User` header and compares to row's `figma_user_id`                                                              |
 
 ## What's NOT in the threat model
 

@@ -27,7 +27,9 @@ export function applyCors(req, res, opts = {}) {
   const origin = /** @type {string|undefined} */ (req.headers?.origin);
   const allowed = new Set([
     "null", // Figma plugin srcdoc iframe
-    ...(process.env.ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
+    ...(process.env.ALLOWED_ORIGINS?.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) ?? []),
   ]);
 
   if (opts.strict) {
@@ -37,10 +39,7 @@ export function applyCors(req, res, opts = {}) {
     res.setHeader("Access-Control-Allow-Origin", origin || "null");
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Figma-User",
-    );
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Figma-User");
     res.setHeader("Access-Control-Max-Age", "600");
   } else {
     // Origin present but not in the allow list — refuse to set the header

@@ -18,8 +18,7 @@ const FIGMA_FILE_KEY = /^[A-Za-z0-9]{8,40}$/;
 const FIGMA_NUMERIC_ID = /^[0-9]{6,30}$/;
 
 /** UUIDv4-ish (we accept any RFC 4122 UUID for OAuth state). */
-const UUID_V4 =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * @param {unknown} v
@@ -27,9 +26,7 @@ const UUID_V4 =
  */
 export function assertSlackChannelId(v) {
   if (typeof v !== "string" || !SLACK_CHANNEL_ID.test(v)) {
-    throw new ValidationError(
-      `Invalid Slack channel ID: expected pattern ${SLACK_CHANNEL_ID}`,
-    );
+    throw new ValidationError(`Invalid Slack channel ID: expected pattern ${SLACK_CHANNEL_ID}`);
   }
   return v;
 }
@@ -92,9 +89,8 @@ export function assertChannelList(v) {
   return v.map((entry) => {
     const id = typeof entry === "string" ? entry : entry?.id;
     assertSlackChannelId(id);
-    const name = typeof entry === "object" && entry && typeof entry.name === "string"
-      ? entry.name
-      : undefined;
+    const name =
+      typeof entry === "object" && entry && typeof entry.name === "string" ? entry.name : undefined;
     return name ? { id, name } : { id };
   });
 }

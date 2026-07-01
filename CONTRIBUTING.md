@@ -50,11 +50,11 @@ Subject in lowercase, imperative mood, no trailing period.
 
 `husky` is installed by `npm install`. Three hooks run automatically:
 
-| Hook | What it does |
-|---|---|
+| Hook         | What it does                                     |
+| ------------ | ------------------------------------------------ |
 | `pre-commit` | `lint-staged`: ESLint + Prettier on staged files |
-| `commit-msg` | `commitlint` on the message |
-| `pre-push` | `npm run typecheck && npm test` |
+| `commit-msg` | `commitlint` on the message                      |
+| `pre-push`   | `npm run typecheck && npm test`                  |
 
 If a hook fails, fix the underlying issue and stage + commit again. **Do not `--no-verify`** unless you have a written reason (e.g. an emergency hotfix) and you've opened a follow-up to fix the lint failure.
 
@@ -96,6 +96,7 @@ npm run test:coverage  # with v8 coverage
 ```
 
 What we test:
+
 - **Lib helpers** (`backend/lib/*`): full unit coverage for pure functions — encryption round-trip + tampering, validators, escape, idempotency key derivation, slack-blocks formatting + escaping.
 - **API handlers:** not yet — needs a Supabase test harness. PRs welcome.
 - **UI:** not yet — happy-dom + dispatching `postMessage` is feasible; tracked as future work.

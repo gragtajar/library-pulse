@@ -18,12 +18,8 @@ const MAX_DESCRIPTION_CHARS = 1500;
  * @param {string} fileKey
  */
 export function buildSlackBlocks(payload, fileKey) {
-  const publisher =
-    payload.triggered_by?.handle ||
-    payload.triggered_by?.email ||
-    "Unknown user";
-  const description =
-    typeof payload.description === "string" ? payload.description.trim() : "";
+  const publisher = payload.triggered_by?.handle || payload.triggered_by?.email || "Unknown user";
+  const description = typeof payload.description === "string" ? payload.description.trim() : "";
   const fileName = payload.file_name || "Untitled";
   const timestamp = payload.timestamp
     ? new Date(payload.timestamp).toLocaleString("en-US", {
@@ -132,9 +128,7 @@ export function buildSlackBlocks(payload, fileKey) {
   // ── Footer ──
   blocks.push({
     type: "context",
-    elements: [
-      { type: "mrkdwn", text: `<${figmaLink}|Open in Figma> · Library Pulse` },
-    ],
+    elements: [{ type: "mrkdwn", text: `<${figmaLink}|Open in Figma> · Library Pulse` }],
   });
 
   return blocks;
@@ -167,7 +161,6 @@ function fmtItems(items) {
  */
 export function fallbackText(payload) {
   const fileName = payload.file_name || "a Figma library";
-  const publisher =
-    payload.triggered_by?.handle || payload.triggered_by?.email || "Someone";
+  const publisher = payload.triggered_by?.handle || payload.triggered_by?.email || "Someone";
   return `📦 ${publisher} published changes to ${fileName}`;
 }

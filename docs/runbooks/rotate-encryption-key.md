@@ -30,7 +30,7 @@ If you believe the key has been **actively used** by an attacker (e.g. you see s
 3. `TRUNCATE TABLE slack_installations, figma_tokens, figma_webhooks, auth_sessions`
 4. Generate a new key, deploy, force every user to re-OAuth
 
-If the key was merely *exposed* (e.g. committed to a private repo, surfaced in a screenshot) but you have no evidence of use, rotation is appropriate.
+If the key was merely _exposed_ (e.g. committed to a private repo, surfaced in a screenshot) but you have no evidence of use, rotation is appropriate.
 
 ### 1. Generate the new key
 

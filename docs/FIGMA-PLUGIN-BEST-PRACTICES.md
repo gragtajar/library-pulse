@@ -23,6 +23,7 @@ If you add a new pattern that other Figma plugins would benefit from, append it 
 **Why:** Plugins are shipped to users — a typo'd `msg.type` in production silently does nothing and the user sees a frozen UI. The allow-list converts that to a loud `figma.notify` error.
 
 **Where:**
+
 - [`figma-plugin/code.js`](../figma-plugin/code.js) (`ALLOWED_UI_MESSAGE_TYPES` set + `safe()` wrapper)
 - [`backend/lib/types.js`](../backend/lib/types.js) (`UiToPluginMessage` / `PluginToUiMessage` typedefs)
 - [ADR-004](./adrs/004-plugin-ui-message-contract.md)
@@ -36,6 +37,7 @@ If you add a new pattern that other Figma plugins would benefit from, append it 
 **Why:** The Figma UI runs inside an `iframe` with `srcdoc`, which has `Origin: null`. XSS still gives an attacker access to the user's plugin storage, Figma user id, and any token the UI happened to be holding. Cheap to do right.
 
 **Where:**
+
 - [`figma-plugin/ui.html`](../figma-plugin/ui.html) — `renderChannels()` builds pills with the DOM API; channel IDs are written via `textContent`, not interpolation.
 - [`backend/lib/oauth-result-page.js`](../backend/lib/oauth-result-page.js) — every reflected query value goes through `escapeHtml`.
 
@@ -88,6 +90,7 @@ If you add a new pattern that other Figma plugins would benefit from, append it 
 **Why:** "Why did Slack get notified twice?" is one of the most common Figma-plugin webhook complaints. One small table + one INSERT removes it.
 
 **Where:**
+
 - [`backend/lib/idempotency.js`](../backend/lib/idempotency.js) — `deriveEventKey` + `reserveEvent`
 - [`backend/api/webhook.js`](../backend/api/webhook.js) — checked after passcode validation
 - [`database/schema.sql`](../database/schema.sql) — `webhook_events` table + 14-day GC cron stub
@@ -101,6 +104,7 @@ If you add a new pattern that other Figma plugins would benefit from, append it 
 **Why:** Stateless OAuth handlers are a classic source of CSRF and replay vulnerabilities. The patterns here are cheap and obviate the most common failure modes.
 
 **Where:**
+
 - [`backend/lib/auth-session.js`](../backend/lib/auth-session.js) — `claimAuthSession` + `finalizeAuthSession`
 - [`backend/lib/validators.js`](../backend/lib/validators.js) — `assertUuid`
 - [`database/schema.sql`](../database/schema.sql) — `auth_sessions.expires_at` + `used_at` columns + the 5-min `expire-auth-sessions` cron stub

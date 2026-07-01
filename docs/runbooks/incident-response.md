@@ -4,12 +4,12 @@
 
 ## Incident severities
 
-| Severity | Definition | Response time |
-|---|---|---|
-| **SEV-1** | Tokens leaked, db wiped, Slack bot suspended for abuse | < 1 hour |
-| **SEV-2** | Production endpoint down for > 30 minutes, all teams affected | < 4 hours |
-| **SEV-3** | Single team broken, no data loss, no security impact | < 24 hours |
-| **SEV-4** | Cosmetic bug, low user impact | Next sprint |
+| Severity  | Definition                                                    | Response time |
+| --------- | ------------------------------------------------------------- | ------------- |
+| **SEV-1** | Tokens leaked, db wiped, Slack bot suspended for abuse        | < 1 hour      |
+| **SEV-2** | Production endpoint down for > 30 minutes, all teams affected | < 4 hours     |
+| **SEV-3** | Single team broken, no data loss, no security impact          | < 24 hours    |
+| **SEV-4** | Cosmetic bug, low user impact                                 | Next sprint   |
 
 ## Common scenarios
 
@@ -20,6 +20,7 @@
 **Likely cause:** Figma firing many `LIBRARY_PUBLISH` events for a single team (mass component edit), or a Figma retry loop.
 
 **Action:**
+
 1. Check `webhook_events` table — are we de-duping correctly? Same `event_key` more than once means our idempotency is broken; investigate `deriveEventKey`.
 2. Slack rate-limit is per-channel, not per-token. If a single channel is the bottleneck, check `notification_log` for `error_message ILIKE '%rate_limited%'` rows.
 3. Temporary mitigation: lower `SLACK_POST_CONCURRENCY` in `backend/api/webhook.js` from 4 to 1, redeploy. Slack queues per-channel so this slows fan-out but reduces 429s.
@@ -30,6 +31,7 @@
 **Symptoms:** rows in `notification_log` with `error_message LIKE 'ratelimited%'`.
 
 **Action:**
+
 1. Identify which workspace — `notification_log` joins to `configurations.slack_team_id`.
 2. The token isn't expired; Slack is throttling. Slow down our fan-out (see above) and back off automatically — current code does NOT auto-backoff, so this is a known gap. Track as a follow-up issue.
 
@@ -38,6 +40,7 @@
 **Symptoms:** `figma_webhook` registration starts failing for one team; new configs fail with `figma_token_persist_failed` or `401 Unauthorized` upstream.
 
 **Action:**
+
 1. Check `figma_tokens.expires_at` for the user.
 2. v1 of the code does NOT refresh tokens — the user must reconnect Figma via the plugin. Tell the user to delete their config and run setup again.
 3. Long-term fix: implement refresh-token flow. Tracked in CHANGELOG as a known gap.
@@ -49,6 +52,7 @@
 ### Database was wiped or corrupted
 
 **SEV-1.**
+
 1. Pause all webhook traffic: in Vercel, set `NODE_OPTIONS=--unhandled-rejections=throw` plus a feature-flag env that the webhook handler short-circuits on. Or roll back to a deploy that returns 503 from `/api/webhook`.
 2. Restore from Supabase point-in-time recovery (free tier offers 7 days). Dashboard → Project Settings → Database → Backups.
 3. After restore, the `webhook_events` table may be stale — Figma retries during the outage might be re-delivered and post duplicate Slack messages. Accept this, or temporarily increase the dedupe window by extending the `gc-webhook-events` retention.

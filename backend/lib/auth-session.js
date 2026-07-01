@@ -15,30 +15,36 @@
  */
 
 import supabase from "./supabase.js";
-import { ForbiddenError, NotFoundError } from "./errors.js";
+import { ForbiddenError } from "./errors.js";
 
 /**
- * Atomically claim a pending session — fetches it, validates expiry, and
- * marks it `in_progress` so concurrent callbacks lose.
+ * Atomically claim a pending session. This is a single conditional UPDATE that
+ * stamps `used_at` only if the row is still `pending`, unused, and unexpired —
+ * so two concurrent callbacks racing the same `state` can never both win
+ * (exactly one UPDATE matches `used_at IS NULL`). The previous implementation
+ * was a plain SELECT, which left a TOCTOU window despite claiming atomicity.
  *
  * @param {string} state
  * @param {"slack" | "figma"} provider
  * @returns {Promise<{ state: string, provider: string, figma_user_id: string|null }>}
  */
 export async function claimAuthSession(state, provider) {
+  const nowIso = new Date().toISOString();
   const { data: row, error } = await supabase
     .from("auth_sessions")
-    .select("state, provider, figma_user_id, status, expires_at, used_at")
+    .update({ used_at: nowIso })
     .eq("state", state)
     .eq("provider", provider)
+    .eq("status", "pending")
+    .is("used_at", null)
+    .gt("expires_at", nowIso)
+    .select("state, provider, figma_user_id")
     .single();
 
-  if (error || !row) throw new NotFoundError("auth_session_not_found");
-  if (row.used_at) throw new ForbiddenError("auth_session_already_used");
-  if (row.status !== "pending") throw new ForbiddenError("auth_session_not_pending");
-  if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
-    throw new ForbiddenError("auth_session_expired");
-  }
+  // No row matched the conditional update: it doesn't exist, was already
+  // claimed, isn't pending, or has expired. We can't cheaply distinguish, so
+  // surface a single 403 — the callback can't proceed regardless.
+  if (error || !row) throw new ForbiddenError("auth_session_invalid_or_used");
 
   return {
     state: row.state,

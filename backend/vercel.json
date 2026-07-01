@@ -7,24 +7,30 @@
     }
   },
   "routes": [
-    { "src": "/api/auth/slack",          "dest": "/api/auth/slack.js" },
+    { "src": "/api/auth/slack", "dest": "/api/auth/slack.js" },
     { "src": "/api/auth/slack-callback", "dest": "/api/auth/slack-callback.js" },
-    { "src": "/api/auth/figma",          "dest": "/api/auth/figma.js" },
+    { "src": "/api/auth/figma", "dest": "/api/auth/figma.js" },
     { "src": "/api/auth/figma-callback", "dest": "/api/auth/figma-callback.js" },
-    { "src": "/api/auth-status",         "dest": "/api/auth-status.js" },
-    { "src": "/api/config",              "dest": "/api/config.js" },
-    { "src": "/api/webhook",             "dest": "/api/webhook.js" },
-    { "src": "/api/health",              "dest": "/api/health.js" }
+    { "src": "/api/auth-status", "dest": "/api/auth-status.js" },
+    { "src": "/api/config", "dest": "/api/config.js" },
+    { "src": "/api/webhook", "dest": "/api/webhook.js" },
+    { "src": "/api/health", "dest": "/api/health.js" }
   ],
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options",   "value": "nosniff" },
-        { "key": "Referrer-Policy",          "value": "no-referrer" },
-        { "key": "Strict-Transport-Security","value": "max-age=63072000; includeSubDomains; preload" },
-        { "key": "X-Frame-Options",          "value": "DENY" },
-        { "key": "Permissions-Policy",       "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()" }
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        }
       ]
     }
   ]

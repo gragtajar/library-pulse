@@ -2,7 +2,7 @@
  * ESLint v9 flat config (per v2 addendum §T2).
  *
  * Three environments to handle:
- *   1. Vercel serverless handlers (backend/**/*.js): ESM, Node 20 runtime.
+ *   1. Vercel serverless handlers (JS files under backend/): ESM, Node 20 runtime.
  *   2. Figma plugin sandbox (figma-plugin/code.js): ES5-ish + `figma` global,
  *      no Node, no DOM, runs in QuickJS-like sandbox.
  *   3. Figma plugin UI (figma-plugin/ui.html): inline `<script>` browser
@@ -29,6 +29,8 @@ export default [
       "**/build/**",
       "coverage/**",
       ".husky/_/**",
+      // Vitest writes transient config snapshots to the repo root; never lint them.
+      "**/*.timestamp-*.mjs",
     ],
   },
 
@@ -87,11 +89,25 @@ export default [
     },
     rules: {
       "n/no-missing-import": "off", // Vercel/esbuild handles resolution
-      "n/no-unsupported-features/node-builtins": ["error", { version: ">=20.0.0" }],
+      "n/no-unsupported-features/node-builtins": [
+        "error",
+        {
+          version: ">=20.0.0",
+          // Available on Vercel's Node 20 runtime; the rule is conservative
+          // about their "experimental until 21" status.
+          ignores: ["fetch", "AbortSignal", "AbortSignal.timeout"],
+        },
+      ],
       "n/no-process-exit": "error",
       "n/no-deprecated-api": "error",
       "no-console": "error", // structured logger only, no console.log/info
     },
+  },
+
+  // ── 2b. Logger is the one module allowed to touch console ─────────────
+  {
+    files: ["backend/lib/logger.js"],
+    rules: { "no-console": "off" },
   },
 
   // ── 3. Plugin sandbox (figma-plugin/code.js) ──────────────────────────

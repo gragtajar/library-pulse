@@ -25,7 +25,8 @@ export default withErrorHandling(
     if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
     const stateRaw = req.query.state;
-    const state = typeof stateRaw === "string" ? stateRaw : Array.isArray(stateRaw) ? stateRaw[0] : "";
+    const state =
+      typeof stateRaw === "string" ? stateRaw : Array.isArray(stateRaw) ? stateRaw[0] : "";
     assertUuid(state);
 
     const { data: session, error } = await supabase

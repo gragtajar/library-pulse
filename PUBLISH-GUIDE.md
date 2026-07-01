@@ -108,23 +108,16 @@ You already have this (rajatg@lambdatest.com). Make sure you have a **Profession
 
 ## Phase 4: Create the Figma OAuth App
 
-This is separate from the Figma plugin — it's an OAuth application that lets users authorize Library Pulse to register webhooks on their behalf.
+Each installer authorizes their own file webhook through this OAuth app — so it
+works for any user, with no shared admin token and no team-admin requirement.
 
-### 4.1 Register the app
+### 4.1 Create the app
 
-1. Go to [figma.com/developers](https://www.figma.com/developers).
-2. Click **My apps** in the top navigation.
-3. Click **Create a new app**.
-4. Fill in:
-   - **App name:** Library Pulse
-   - **Website URL:** Your GitHub repo URL
-   - **Callback URL:**
-     ```
-     https://library-pulse.vercel.app/api/auth/figma-callback
-     ```
-   - **Scopes:** Check `files:read` and `webhooks:write`
-5. Click **Save**.
-6. Copy:
+1. Go to [figma.com/developers/apps](https://www.figma.com/developers/apps).
+2. Click **Create a new app**, name it "Library Pulse".
+3. Add an OAuth **redirect URL**: `https://YOUR-VERCEL-DOMAIN/api/auth/figma-callback`.
+4. Ensure the app can request the `webhooks:write` scope (plus a file-read scope).
+5. You'll need:
    - **Client ID** → `FIGMA_CLIENT_ID`
    - **Client Secret** → `FIGMA_CLIENT_SECRET`
 
@@ -157,6 +150,7 @@ vercel
 ```
 
 Vercel will ask a few questions:
+
 - **Set up and deploy?** → Yes
 - **Which scope?** → Your personal account (or team)
 - **Link to existing project?** → No
@@ -193,18 +187,21 @@ vercel --prod
 ### 5.6 Verify deployment
 
 Open your browser and go to:
+
 ```
 https://YOUR-VERCEL-DOMAIN/api/health
 ```
 
 You should see:
+
 ```json
-{"status":"ok","service":"library-pulse","version":"1.0.0","timestamp":"..."}
+{ "status": "ok", "service": "library-pulse", "version": "1.0.0", "timestamp": "..." }
 ```
 
 ### 5.7 Update redirect URLs
 
 If your Vercel domain is different from `library-pulse.vercel.app`, go back and update:
+
 - **Slack app** → OAuth & Permissions → Redirect URLs
 - **Figma app** → My apps → Edit → Callback URL
 
@@ -247,9 +244,7 @@ When you import the manifest, Figma assigns a real numeric plugin ID. You need t
 2. The plugin UI should appear.
 3. Walk through the full setup flow:
    - Click **Connect to Slack** → complete the OAuth in your browser.
-   - Click **Connect Figma Account** → complete the OAuth.
    - Select the current file or enter a file ID.
-   - Enter your Figma Team ID.
    - Add 1–3 Slack channel IDs.
    - Click **Save & Activate**.
 4. Now publish a small change in your Figma library and verify the Slack message arrives.
@@ -262,13 +257,14 @@ When you import the manifest, Figma assigns a real numeric plugin ID. You need t
 
 You'll need these before submitting:
 
-| Asset | Specs | Purpose |
-|-------|-------|---------|
-| **Plugin icon** | 128 × 128 PNG, no transparency | Shows in the plugin list and Community page |
-| **Cover image** | 1920 × 960 PNG or JPG | Banner at the top of your Community listing |
-| **Screenshots** | 1-5 images, any size (16:9 recommended) | Show the plugin UI in action |
+| Asset           | Specs                                   | Purpose                                     |
+| --------------- | --------------------------------------- | ------------------------------------------- |
+| **Plugin icon** | 128 × 128 PNG, no transparency          | Shows in the plugin list and Community page |
+| **Cover image** | 1920 × 960 PNG or JPG                   | Banner at the top of your Community listing |
+| **Screenshots** | 1-5 images, any size (16:9 recommended) | Show the plugin UI in action                |
 
 Tips for screenshots:
+
 - Capture the plugin running inside Figma (use Cmd+Shift+4 on Mac).
 - Show each state: setup flow, dashboard, and the Slack message output.
 - Add brief annotations if helpful.
@@ -278,12 +274,15 @@ Tips for screenshots:
 Prepare these ahead of time:
 
 **Tagline** (max 60 chars):
+
 > Slack notifications when your Figma library is published.
 
 **Description** (plain text, will display on the Community page):
+
 > Library Pulse sends a rich Slack message whenever changes are published to your Figma library. See exactly what was added, modified, or removed — components, styles, and variables — along with who published and the description they entered.
 >
 > Setup takes under 2 minutes:
+>
 > 1. Connect your Slack workspace (secure OAuth).
 > 2. Connect your Figma account (for automatic webhook setup).
 > 3. Pick a file and up to 3 Slack channels.
@@ -328,6 +327,7 @@ Prepare these ahead of time:
 ### 7.5 After approval
 
 Your plugin will appear at:
+
 ```
 https://www.figma.com/community/plugin/YOUR_PLUGIN_ID/Library-Pulse
 ```
@@ -377,7 +377,7 @@ Make sure you're using the **desktop app**, not the browser. Plugin development 
 Double-check that the redirect URLs in your Slack/Figma app settings exactly match your Vercel deployment URL (including `https://`, no trailing slash).
 
 **Webhook not firing:**
-Figma webhooks are team-level. Make sure the Team ID you entered is correct (from the URL: figma.com/files/team/**THIS_NUMBER**/…).
+Webhooks are registered per file using each user's Figma OAuth token. If registration fails: confirm the user completed the **Connect Figma** step, that the OAuth app requests the `webhooks:write` scope, and that the user has edit access to the selected file. An expired token shows as "figma_reauth_required" — the user just reconnects Figma.
 
 **Slack message not appearing:**
 Check the Vercel function logs (`vercel logs --follow`) for errors. Common issues: bot not in the channel (use `chat:write.public` scope), or channel ID is wrong.
