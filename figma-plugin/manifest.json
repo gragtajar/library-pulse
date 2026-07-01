@@ -8,7 +8,10 @@
   "documentAccess": "dynamic-page",
   "permissions": ["currentuser"],
   "networkAccess": {
-    "allowedDomains": ["https://library-pulse.vercel.app"],
-    "reasoning": "Connects to the Library Pulse backend for Slack and Figma OAuth and notification configuration."
+    "allowedDomains": [
+      "https://library-pulse.vercel.app",
+      "https://cdn.vercel-insights.com"
+    ],
+    "reasoning": "Connects to the Library Pulse backend for Slack and Figma OAuth and notification configuration. Vercel Analytics for usage tracking."
   }
 }
