@@ -53,7 +53,7 @@ The system has **three runtimes** with disjoint trust models:
 
 2. **Figma plugin UI iframe** (`figma-plugin/ui.html`) — a `srcdoc` iframe rendered by Figma. Has DOM and `fetch`, but origin is `null`. The only network destinations it can reach are the ones listed in `manifest.json`'s `networkAccess.allowedDomains`.
 
-3. **Vercel serverless backend** (`backend/api/*.js`) — Node 20 ESM. Holds the Slack/Figma client secrets and the AES encryption key. Talks to Supabase and to upstream Slack/Figma APIs.
+3. **Vercel serverless backend** (`backend/api/*.js`) — Node 22 ESM. Holds the Slack/Figma client secrets and the AES encryption key. Talks to Supabase and to upstream Slack/Figma APIs.
 
 The end-user browser is involved only during OAuth — it never sees an API call from the plugin.
 
@@ -108,13 +108,13 @@ Per-team webhook is registered once when the first user in the team creates a co
 
 ## 4. Security boundaries
 
-| Boundary | Trust on the inside | What we do at the edge |
-|---|---|---|
-| Browser → `/api/auth/*-callback` | Untrusted query string | UUID-validate `state`, ignore unknown `error` codes, render escaped HTML only, hard CSP `default-src 'none'` |
-| Plugin UI → backend | UI controls the body but Figma rate-limits it | Require `X-Figma-User` header, compare it to `figma_user_id` field in body, reject mismatches with 403 |
-| Figma webhook → `/api/webhook` | Anyone can POST | Hard-require `webhook_id` + passcode header, `timingSafeEqual` compare, dedupe via `webhook_events` UNIQUE |
-| Backend → Slack | Bot token is in env once decrypted | `fetchWithTimeout(8s)`, bounded concurrency, never log token |
-| Backend → Supabase | Service-role key bypasses RLS | RLS still enabled in case the key leaks; structured logs scrub tokens |
+| Boundary                         | Trust on the inside                           | What we do at the edge                                                                                       |
+| -------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Browser → `/api/auth/*-callback` | Untrusted query string                        | UUID-validate `state`, ignore unknown `error` codes, render escaped HTML only, hard CSP `default-src 'none'` |
+| Plugin UI → backend              | UI controls the body but Figma rate-limits it | Require `X-Figma-User` header, compare it to `figma_user_id` field in body, reject mismatches with 403       |
+| Figma webhook → `/api/webhook`   | Anyone can POST                               | Hard-require `webhook_id` + passcode header, `timingSafeEqual` compare, dedupe via `webhook_events` UNIQUE   |
+| Backend → Slack                  | Bot token is in env once decrypted            | `fetchWithTimeout(8s)`, bounded concurrency, never log token                                                 |
+| Backend → Supabase               | Service-role key bypasses RLS                 | RLS still enabled in case the key leaks; structured logs scrub tokens                                        |
 
 The encryption key (`ENCRYPTION_KEY`) is the single root of secret in the system. If it leaks, every stored OAuth token must be revoked at the providers. See [`docs/runbooks/rotate-encryption-key.md`](./docs/runbooks/rotate-encryption-key.md).
 
@@ -148,16 +148,16 @@ library-pulse/
 
 ## 6. Dependencies (one line each)
 
-| Package | Why |
-|---|---|
-| `@supabase/supabase-js` | Postgres client + service-role auth |
-| `node:crypto` | AES-256-GCM + `timingSafeEqual` for the webhook passcode |
-| `ajv` | JSON Schema validation for `manifest.json` in CI |
-| `eslint` v9 + plugins | Code quality; flat config per v2 §T2 |
-| `vitest` + `@vitest/coverage-v8` | Unit tests with v8 coverage |
-| `husky` + `lint-staged` + `commitlint` | Pre-commit hygiene |
-| `prettier` | Formatting (config-driven, no surprises) |
-| `typescript` | `tsc` runs in `checkJs` mode against `.js` sources; no `.ts` files yet |
+| Package                                | Why                                                                    |
+| -------------------------------------- | ---------------------------------------------------------------------- |
+| `@supabase/supabase-js`                | Postgres client + service-role auth                                    |
+| `node:crypto`                          | AES-256-GCM + `timingSafeEqual` for the webhook passcode               |
+| `ajv`                                  | JSON Schema validation for `manifest.json` in CI                       |
+| `eslint` v9 + plugins                  | Code quality; flat config per v2 §T2                                   |
+| `vitest` + `@vitest/coverage-v8`       | Unit tests with v8 coverage                                            |
+| `husky` + `lint-staged` + `commitlint` | Pre-commit hygiene                                                     |
+| `prettier`                             | Formatting (config-driven, no surprises)                               |
+| `typescript`                           | `tsc` runs in `checkJs` mode against `.js` sources; no `.ts` files yet |
 
 We deliberately have **zero runtime web frameworks** — every endpoint is a default-export handler that takes `(req, res)`. Vercel's runtime gives us the rest.
 
@@ -167,12 +167,12 @@ We deliberately have **zero runtime web frameworks** — every endpoint is a def
 
 The Slack post path is the only one that runs under load.
 
-| Stage | Target |
-|---|---|
-| Webhook receipt → first Slack post | < 800 ms p95 |
-| Per-channel Slack post (`chat.postMessage`) | < 2000 ms (8 s hard timeout) |
-| Total fan-out for 3 configs × 3 channels | < 4 s p95 |
-| Backend cold start | < 1 s (single-file handlers, no top-level await) |
+| Stage                                       | Target                                           |
+| ------------------------------------------- | ------------------------------------------------ |
+| Webhook receipt → first Slack post          | < 800 ms p95                                     |
+| Per-channel Slack post (`chat.postMessage`) | < 2000 ms (8 s hard timeout)                     |
+| Total fan-out for 3 configs × 3 channels    | < 4 s p95                                        |
+| Backend cold start                          | < 1 s (single-file handlers, no top-level await) |
 
 Vercel's `maxDuration: 15` is the safety net. If we ever need a longer one (large fan-out), the webhook handler should respond `202` early and process out-of-band via a queue — see ADR-004 for the eventual queue migration plan.
 

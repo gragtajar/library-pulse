@@ -26,9 +26,7 @@ describe("validators", () => {
 
   describe("assertFigmaFileKey", () => {
     it("accepts alphanumeric keys 8-40 chars", () => {
-      expect(assertFigmaFileKey("jxunc0ljQa3mKVki8K5kj9")).toBe(
-        "jxunc0ljQa3mKVki8K5kj9",
-      );
+      expect(assertFigmaFileKey("jxunc0ljQa3mKVki8K5kj9")).toBe("jxunc0ljQa3mKVki8K5kj9");
     });
     it("rejects keys with slashes or special chars", () => {
       expect(() => assertFigmaFileKey("ab/cd/ef")).toThrow(ValidationError);

@@ -10,9 +10,7 @@ describe("escapeHtml", () => {
   });
 
   it("escapes attribute-breakers", () => {
-    expect(escapeHtml(`"' onclick="x"`)).toBe(
-      "&quot;&#39; onclick=&quot;x&quot;",
-    );
+    expect(escapeHtml(`"' onclick="x"`)).toBe("&quot;&#39; onclick=&quot;x&quot;");
   });
 
   it("handles nullish values without crashing", () => {
@@ -27,9 +25,7 @@ describe("escapeHtml", () => {
 
 describe("escapeSlack", () => {
   it("only escapes &, <, > (per Slack mrkdwn rules)", () => {
-    expect(escapeSlack("<!channel> & friends")).toBe(
-      "&lt;!channel&gt; &amp; friends",
-    );
+    expect(escapeSlack("<!channel> & friends")).toBe("&lt;!channel&gt; &amp; friends");
   });
 
   it("leaves backticks and underscores alone (mrkdwn formatting)", () => {

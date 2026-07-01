@@ -62,9 +62,7 @@ describe("slack-blocks", () => {
   });
 
   it("fallbackText produces a non-empty string with publisher and file", () => {
-    expect(fallbackText({ file_name: "DS", triggered_by: { handle: "@me" } })).toMatch(
-      /@me .* DS/,
-    );
+    expect(fallbackText({ file_name: "DS", triggered_by: { handle: "@me" } })).toMatch(/@me .* DS/);
   });
 
   it("uses encodeURIComponent for the file-link URL", () => {

@@ -36,11 +36,7 @@ export default {
     ],
     "header-max-length": [2, "always", 100],
     "body-max-line-length": [1, "always", 120],
-    "subject-case": [
-      2,
-      "never",
-      ["upper-case", "pascal-case", "start-case"],
-    ],
+    "subject-case": [2, "never", ["upper-case", "pascal-case", "start-case"]],
     "scope-case": [2, "always", "kebab-case"],
   },
 };

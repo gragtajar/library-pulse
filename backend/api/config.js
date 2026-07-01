@@ -2,16 +2,20 @@
 /**
  * /api/config — CRUD for notification configurations.
  *
- *   GET    ?figmaUserId=…           → list user's configs
- *   POST   { …newConfig }           → create config + auto-register webhook
- *   PUT    { id, …updates }         → update config
- *   DELETE ?id=…                    → delete config
+ *   GET    → list the caller's configs
+ *   POST   { fileKey, fileName?, slackTeamId, channels } → create + register webhook
+ *   PUT    { id, …updates } → update config
+ *   DELETE ?id=…            → delete config (and tear down its Figma webhook)
  *
- * Authorization model (best-effort without a real session layer): every
- * request must carry the calling Figma user's ID via the `X-Figma-User`
- * header. We compare it to the row's `figma_user_id` before mutating —
- * a missing/mismatched header → 403. This is not a substitute for real
- * auth, but it stops casual cross-user enumeration.
+ * Authorization: every request must carry `Authorization: Bearer <token>`,
+ * a signed session token minted after Figma OAuth (see lib/session.js). The
+ * caller's Figma user id is derived from that token — never from the request
+ * body or a self-asserted header — so one user cannot act on another's configs.
+ *
+ * Webhook model: file-context. When a config is saved we register a Figma
+ * `LIBRARY_PUBLISH` webhook on the *selected file* using the *caller's own*
+ * Figma OAuth token. This only needs "Can edit" on the file, so it works for
+ * any installer — no shared admin token, no team-admin requirement, no Team ID.
  */
 
 import crypto from "node:crypto";
@@ -19,19 +23,9 @@ import supabase from "../lib/supabase.js";
 import { decrypt } from "../lib/encryption.js";
 import { applyCors, fetchWithTimeout, withErrorHandling } from "../lib/http.js";
 import { logger } from "../lib/logger.js";
-import {
-  ForbiddenError,
-  NotFoundError,
-  UpstreamError,
-  ValidationError,
-} from "../lib/errors.js";
-import {
-  assertChannelList,
-  assertFigmaFileKey,
-  assertFigmaTeamId,
-  assertFigmaUserId,
-  assertUuid,
-} from "../lib/validators.js";
+import { requireSession } from "../lib/session.js";
+import { ForbiddenError, NotFoundError, UpstreamError, ValidationError } from "../lib/errors.js";
+import { assertChannelList, assertFigmaFileKey, assertUuid } from "../lib/validators.js";
 
 export default withErrorHandling(
   /**
@@ -56,34 +50,17 @@ export default withErrorHandling(
   },
 );
 
-/** @param {import("../lib/types.js").VercelRequest} req */
-function callingUser(req) {
-  const raw = req.headers?.["x-figma-user"];
-  const userHeader = typeof raw === "string" ? raw : Array.isArray(raw) ? raw[0] : "";
-  if (!userHeader) throw new ForbiddenError("missing_x_figma_user");
-  return assertFigmaUserId(userHeader);
-}
-
 /**
  * @param {import("../lib/types.js").VercelRequest} req
  * @param {import("../lib/types.js").VercelResponse} res
  */
 async function handleGet(req, res) {
-  const callerId = callingUser(req);
-
-  const queryUser = req.query.figmaUserId;
-  const figmaUserId =
-    typeof queryUser === "string" ? queryUser : Array.isArray(queryUser) ? queryUser[0] : "";
-  assertFigmaUserId(figmaUserId);
-
-  if (figmaUserId !== callerId) {
-    throw new ForbiddenError("figma_user_mismatch");
-  }
+  const callerId = requireSession(req);
 
   const { data, error } = await supabase
     .from("configurations")
     .select("*, slack_installations(slack_team_name)")
-    .eq("figma_user_id", figmaUserId)
+    .eq("figma_user_id", callerId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -99,13 +76,9 @@ async function handleGet(req, res) {
  * @param {import("../lib/types.js").VercelResponse} res
  */
 async function handlePost(req, res) {
-  const callerId = callingUser(req);
+  const callerId = requireSession(req);
   const body = /** @type {Record<string, unknown> | null} */ (req.body) ?? {};
 
-  const figmaUserId = assertFigmaUserId(body.figmaUserId);
-  if (figmaUserId !== callerId) throw new ForbiddenError("figma_user_mismatch");
-
-  const figmaTeamId = assertFigmaTeamId(body.figmaTeamId);
   const fileKey = assertFigmaFileKey(body.fileKey);
   const slackTeamId = typeof body.slackTeamId === "string" ? body.slackTeamId : "";
   if (!slackTeamId) throw new ValidationError("Missing slackTeamId");
@@ -117,8 +90,7 @@ async function handlePost(req, res) {
     .from("configurations")
     .upsert(
       {
-        figma_user_id: figmaUserId,
-        figma_team_id: figmaTeamId,
+        figma_user_id: callerId,
         figma_file_key: fileKey,
         figma_file_name: fileName,
         slack_team_id: slackTeamId,
@@ -135,12 +107,22 @@ async function handlePost(req, res) {
     throw new UpstreamError("config_save_failed");
   }
 
-  let webhookStatus = "existing";
+  // Register the file-context webhook. If this fails (e.g. Figma token expired,
+  // or the user lacks edit access), surface it — the config exists but won't
+  // deliver until the webhook is registered. We report status, not a 500, so
+  // the plugin can show an actionable message.
+  let webhookStatus;
   try {
-    webhookStatus = await ensureWebhook(figmaUserId, figmaTeamId);
+    webhookStatus = await ensureWebhook(callerId, fileKey);
   } catch (err) {
-    logger.error("webhook_register_failed", { err });
-    webhookStatus = "registration_failed";
+    logger.warn("webhook_register_failed", {
+      file_key: fileKey,
+      reason: err instanceof Error ? err.message : String(err),
+    });
+    webhookStatus =
+      err instanceof ValidationError || err instanceof ForbiddenError
+        ? err.message
+        : "registration_failed";
   }
 
   return res.status(201).json({ ...config, webhookStatus });
@@ -151,25 +133,23 @@ async function handlePost(req, res) {
  * @param {import("../lib/types.js").VercelResponse} res
  */
 async function handlePut(req, res) {
-  const callerId = callingUser(req);
+  const callerId = requireSession(req);
   const body = /** @type {Record<string, unknown> | null} */ (req.body) ?? {};
 
   const id = typeof body.id === "string" ? body.id : "";
   assertUuid(id);
 
-  // Confirm the caller owns this configuration.
   const { data: row, error: fetchErr } = await supabase
     .from("configurations")
     .select("figma_user_id")
     .eq("id", id)
     .single();
   if (fetchErr || !row) throw new NotFoundError("config_not_found");
-  if (row.figma_user_id !== callerId) throw new ForbiddenError("figma_user_mismatch");
+  if (row.figma_user_id !== callerId) throw new ForbiddenError("not_owner");
 
   /** @type {Record<string, unknown>} */
   const updates = {};
   if (body.channels !== undefined) updates.channels = assertChannelList(body.channels);
-  if (body.fileKey !== undefined) updates.figma_file_key = assertFigmaFileKey(body.fileKey);
   if (typeof body.fileName === "string") updates.figma_file_name = body.fileName.slice(0, 200);
   if (typeof body.isActive === "boolean") updates.is_active = body.isActive;
 
@@ -197,18 +177,18 @@ async function handlePut(req, res) {
  * @param {import("../lib/types.js").VercelResponse} res
  */
 async function handleDelete(req, res) {
-  const callerId = callingUser(req);
+  const callerId = requireSession(req);
   const idRaw = req.query.id;
   const id = typeof idRaw === "string" ? idRaw : Array.isArray(idRaw) ? idRaw[0] : "";
   assertUuid(id);
 
   const { data: row, error: fetchErr } = await supabase
     .from("configurations")
-    .select("figma_user_id")
+    .select("figma_user_id, figma_file_key")
     .eq("id", id)
     .single();
   if (fetchErr || !row) throw new NotFoundError("config_not_found");
-  if (row.figma_user_id !== callerId) throw new ForbiddenError("figma_user_mismatch");
+  if (row.figma_user_id !== callerId) throw new ForbiddenError("not_owner");
 
   const { error } = await supabase.from("configurations").delete().eq("id", id);
   if (error) {
@@ -216,34 +196,64 @@ async function handleDelete(req, res) {
     throw new UpstreamError("config_delete_failed");
   }
 
+  // Best-effort: tear down the file webhook so it stops firing once nobody
+  // is listening. Failure here is non-fatal (the config is already gone).
+  try {
+    await teardownWebhook(callerId, row.figma_file_key);
+  } catch (err) {
+    logger.warn("webhook_teardown_failed", {
+      reason: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   return res.status(200).json({ success: true });
 }
 
+// ── Figma webhook helpers ──────────────────────────────────────────────────
+
 /**
- * Register a Figma `LIBRARY_PUBLISH` webhook for the team if one isn't
- * already active.
+ * Decrypt the caller's stored Figma OAuth access token, rejecting if they
+ * haven't connected Figma or the token has expired (they must reconnect).
  *
  * @param {string} figmaUserId
- * @param {string} figmaTeamId
+ * @returns {Promise<string>}
+ */
+async function getFigmaAccessToken(figmaUserId) {
+  const { data: tok } = await supabase
+    .from("figma_tokens")
+    .select("access_token_enc, expires_at")
+    .eq("figma_user_id", figmaUserId)
+    .maybeSingle();
+
+  if (!tok || !tok.access_token_enc) {
+    throw new ValidationError("figma_not_connected");
+  }
+  if (tok.expires_at && new Date(tok.expires_at).getTime() < Date.now()) {
+    throw new ValidationError("figma_reauth_required");
+  }
+  return decrypt(tok.access_token_enc);
+}
+
+/**
+ * Register a `LIBRARY_PUBLISH` webhook on the given file (file context) using
+ * the caller's own Figma token, if one isn't already active for this
+ * (user, file). Returns "existing" or "registered".
+ *
+ * @param {string} figmaUserId
+ * @param {string} fileKey
  * @returns {Promise<"existing" | "registered">}
  */
-async function ensureWebhook(figmaUserId, figmaTeamId) {
+async function ensureWebhook(figmaUserId, fileKey) {
   const { data: existing } = await supabase
     .from("figma_webhooks")
     .select("id")
-    .eq("figma_team_id", figmaTeamId)
+    .eq("figma_user_id", figmaUserId)
+    .eq("context_id", fileKey)
     .eq("status", "active")
     .maybeSingle();
   if (existing) return "existing";
 
-  const { data: tokenRow } = await supabase
-    .from("figma_tokens")
-    .select("access_token_enc")
-    .eq("figma_user_id", figmaUserId)
-    .maybeSingle();
-  if (!tokenRow) throw new ValidationError("Figma not connected for this user");
-
-  const figmaToken = decrypt(tokenRow.access_token_enc);
+  const figmaToken = await getFigmaAccessToken(figmaUserId);
   const passcode = crypto.randomBytes(24).toString("hex");
   const endpoint = `${process.env.PUBLIC_URL}/api/webhook`;
 
@@ -255,7 +265,8 @@ async function ensureWebhook(figmaUserId, figmaTeamId) {
     },
     body: JSON.stringify({
       event_type: "LIBRARY_PUBLISH",
-      team_id: figmaTeamId,
+      context: "file",
+      context_id: fileKey,
       endpoint,
       passcode,
       description: "Library Pulse — publish notifications",
@@ -265,20 +276,65 @@ async function ensureWebhook(figmaUserId, figmaTeamId) {
 
   if (!regRes.ok) {
     const errText = await regRes.text();
-    logger.warn("figma_webhook_register_upstream_failed", { status: regRes.status, body: errText.slice(0, 200) });
+    logger.warn("figma_webhook_register_upstream_failed", {
+      status: regRes.status,
+      body: errText.slice(0, 200),
+    });
+    // 403 here almost always means the user lacks edit access to the file or
+    // the OAuth token is missing the webhooks:write scope.
+    if (regRes.status === 403) throw new ForbiddenError("figma_file_permission_denied");
     throw new UpstreamError(`Figma API ${regRes.status}`);
   }
 
   /** @type {any} */
   const regData = await regRes.json();
-  await supabase.from("figma_webhooks").insert({
-    figma_team_id: figmaTeamId,
-    webhook_id: regData.id,
-    passcode,
-    registered_by: figmaUserId,
-    status: "active",
-  });
+  await supabase.from("figma_webhooks").upsert(
+    {
+      figma_user_id: figmaUserId,
+      context: "file",
+      context_id: fileKey,
+      webhook_id: String(regData.id),
+      passcode,
+      registered_by: figmaUserId,
+      status: "active",
+    },
+    { onConflict: "figma_user_id,context_id" },
+  );
 
-  logger.info("figma_webhook_registered", { figma_team_id: figmaTeamId, webhook_id: regData.id });
+  logger.info("figma_webhook_registered", { file_key: fileKey, webhook_id: regData.id });
   return "registered";
+}
+
+/**
+ * Delete the file webhook for a (user, file) from Figma and our table.
+ * No-op if none is registered.
+ *
+ * @param {string} figmaUserId
+ * @param {string} fileKey
+ */
+async function teardownWebhook(figmaUserId, fileKey) {
+  const { data: row } = await supabase
+    .from("figma_webhooks")
+    .select("id, webhook_id")
+    .eq("figma_user_id", figmaUserId)
+    .eq("context_id", fileKey)
+    .maybeSingle();
+  if (!row) return;
+
+  try {
+    const figmaToken = await getFigmaAccessToken(figmaUserId);
+    await fetchWithTimeout(`https://api.figma.com/v2/webhooks/${row.webhook_id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${figmaToken}` },
+      timeoutMs: 10_000,
+    });
+  } catch (err) {
+    // If the token's gone we can't delete it upstream; drop our row anyway so
+    // we don't treat a dead webhook as active.
+    logger.warn("figma_webhook_delete_upstream_failed", {
+      reason: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  await supabase.from("figma_webhooks").delete().eq("id", row.id);
 }

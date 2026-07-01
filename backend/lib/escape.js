@@ -28,7 +28,10 @@ const HTML_ENTITIES = /** @type {const} */ ({
 export function escapeHtml(input) {
   if (input == null) return "";
   const s = String(input);
-  return s.replace(/[&<>"'`/]/g, (ch) => HTML_ENTITIES[/** @type {keyof typeof HTML_ENTITIES} */ (ch)]);
+  return s.replace(
+    /[&<>"'`/]/g,
+    (ch) => HTML_ENTITIES[/** @type {keyof typeof HTML_ENTITIES} */ (ch)],
+  );
 }
 
 /**

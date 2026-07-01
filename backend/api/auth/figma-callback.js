@@ -11,6 +11,7 @@ import supabase from "../../lib/supabase.js";
 import { logger } from "../../lib/logger.js";
 import { renderResultPage } from "../../lib/oauth-result-page.js";
 import { claimAuthSession, finalizeAuthSession } from "../../lib/auth-session.js";
+import { mintSession } from "../../lib/session.js";
 import { assertUuid } from "../../lib/validators.js";
 import { fetchWithTimeout, withErrorHandling } from "../../lib/http.js";
 import { UpstreamError, ValidationError } from "../../lib/errors.js";
@@ -80,9 +81,7 @@ export default withErrorHandling(
     }
 
     const expiresAt =
-      typeof expiresIn === "number"
-        ? new Date(Date.now() + expiresIn * 1000).toISOString()
-        : null;
+      typeof expiresIn === "number" ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
 
     const { error: dbErr } = await supabase.from("figma_tokens").upsert(
       {
@@ -103,7 +102,15 @@ export default withErrorHandling(
       });
     }
 
-    await finalizeAuthSession(state, "completed", { figma_user_id: figmaUserId });
+    // Mint a signed session token bound to this verified Figma user. The
+    // plugin polls auth-status, receives it in result_data, and sends it as a
+    // bearer token on every config call — replacing the spoofable header.
+    const sessionToken = mintSession(figmaUserId);
+
+    await finalizeAuthSession(state, "completed", {
+      figma_user_id: figmaUserId,
+      session_token: sessionToken,
+    });
     logger.info("figma_oauth_completed", { figma_user_id: figmaUserId });
     return renderResultPage(res, { success: true, message: "Figma account connected." });
   },

@@ -22,7 +22,9 @@ const ui = await readFile(UI, "utf8");
 
 const allowed = new Set(manifest.networkAccess?.allowedDomains ?? []);
 if (allowed.has("*")) {
-  console.warn("⚠ manifest allows '*' for network access — that's almost never OK for a published plugin.");
+  console.warn(
+    "⚠ manifest allows '*' for network access — that's almost never OK for a published plugin.",
+  );
 }
 
 // Collect every absolute URL the UI references.
@@ -38,15 +40,14 @@ for (const match of ui.matchAll(urlRe)) {
 }
 
 // Subtract well-known Figma-internal hosts and SVG namespace URIs.
-const ignore = new Set([
-  "http://www.w3.org",
-  "https://www.w3.org",
-]);
+const ignore = new Set(["http://www.w3.org", "https://www.w3.org"]);
 
 const missing = [...found].filter((origin) => !allowed.has(origin) && !ignore.has(origin));
 
 if (missing.length > 0 && !allowed.has("*")) {
-  console.error("✘ figma-plugin/ui.html references origins not declared in manifest.allowedDomains:");
+  console.error(
+    "✘ figma-plugin/ui.html references origins not declared in manifest.allowedDomains:",
+  );
   for (const m of missing) console.error(`  - ${m}`);
   console.error(`\nFix: add them to figma-plugin/manifest.json's networkAccess.allowedDomains.`);
   process.exit(1);

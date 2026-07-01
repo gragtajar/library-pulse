@@ -84,7 +84,9 @@ if (!json.ui && !Array.isArray(json.menu) && json.parameters === undefined) {
 }
 
 if (json.networkAccess?.reasoning && json.networkAccess.reasoning.length < 20) {
-  console.error("✘ networkAccess.reasoning is shorter than 20 characters — reviewers will reject it.");
+  console.error(
+    "✘ networkAccess.reasoning is shorter than 20 characters — reviewers will reject it.",
+  );
   process.exit(1);
 }
 

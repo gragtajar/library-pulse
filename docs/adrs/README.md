@@ -2,12 +2,12 @@
 
 We use ADRs to record meaningful architectural choices — the ones we'd otherwise re-debate every six months. Format borrowed from Michael Nygard's template, slimmed slightly.
 
-| #   | Title                                                | Status   |
-| --- | ---------------------------------------------------- | -------- |
-| 001 | [Vercel serverless + Supabase backend](./001-vercel-and-supabase.md) | Accepted |
-| 002 | [AES-256-GCM for token storage](./002-token-encryption.md)            | Accepted |
+| #   | Title                                                                    | Status   |
+| --- | ------------------------------------------------------------------------ | -------- |
+| 001 | [Vercel serverless + Supabase backend](./001-vercel-and-supabase.md)     | Accepted |
+| 002 | [AES-256-GCM for token storage](./002-token-encryption.md)               | Accepted |
 | 003 | [Webhook passcode authentication model](./003-webhook-passcode-model.md) | Accepted |
-| 004 | [Plugin ↔ UI message contract](./004-plugin-ui-message-contract.md)   | Accepted |
+| 004 | [Plugin ↔ UI message contract](./004-plugin-ui-message-contract.md)      | Accepted |
 
 ## When to write a new ADR
 
@@ -30,18 +30,23 @@ We use ADRs to record meaningful architectural choices — the ones we'd otherwi
 **Date:** YYYY-MM-DD
 
 ## Context
+
 What problem are we solving? What constraints exist?
 
 ## Decision
+
 What we decided, in one paragraph.
 
 ## Alternatives considered
+
 - Alternative A — why rejected
 - Alternative B — why rejected
 
 ## Consequences
+
 What we gain. What we accept. What we leave on the table.
 
 ## References
+
 Links to code, prior art, related ADRs.
 ```

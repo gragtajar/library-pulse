@@ -34,7 +34,10 @@ export function deriveEventKey(payload) {
   /** @param {unknown} a */
   const itemNames = (a) =>
     Array.isArray(a)
-      ? a.map((x) => (typeof x === "string" ? x : x?.key ?? x?.name ?? "")).filter(Boolean).sort()
+      ? a
+          .map((x) => (typeof x === "string" ? x : (x?.key ?? x?.name ?? "")))
+          .filter(Boolean)
+          .sort()
       : [];
 
   const summary = {
@@ -66,6 +69,12 @@ export function deriveEventKey(payload) {
  * Atomically reserve an event key. Returns `true` if this is the first
  * delivery (caller should proceed), `false` if a duplicate.
  *
+ * Retained for the coarse event-level audit table. The webhook handler now
+ * dedupes at *channel* granularity (see `hasSentDelivery`) so that a retry
+ * after a partial fan-out re-drives only the channels that didn't get the
+ * message, instead of either dropping them silently or re-posting the ones
+ * that succeeded.
+ *
  * @param {string} eventKey
  * @param {{ event_type?: string, figma_file_key?: string }} [meta]
  * @returns {Promise<boolean>}
@@ -85,4 +94,29 @@ export async function reserveEvent(eventKey, meta = {}) {
   // Any other DB error: re-throw so the handler can return 5xx and Figma
   // will retry. We'd rather double-deliver than silently drop.
   throw new Error(`webhook_events insert failed: ${error.message}`);
+}
+
+/**
+ * Has this exact (event, config, channel) already been delivered successfully?
+ * Used to make webhook delivery idempotent per channel: a Figma retry skips
+ * channels already marked `sent` in `notification_log` and re-attempts the
+ * rest. (Figma retries are minutes apart, so a check-then-post is safe — there
+ * is no concurrent-duplicate window to race.)
+ *
+ * @param {string} eventKey
+ * @param {string} configId
+ * @param {string} channelId
+ * @returns {Promise<boolean>}
+ */
+export async function hasSentDelivery(eventKey, configId, channelId) {
+  const { data } = await supabase
+    .from("notification_log")
+    .select("id")
+    .eq("event_key", eventKey)
+    .eq("configuration_id", configId)
+    .eq("slack_channel_id", channelId)
+    .eq("status", "sent")
+    .limit(1)
+    .maybeSingle();
+  return !!data;
 }

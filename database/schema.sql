@@ -36,11 +36,17 @@ CREATE TABLE figma_tokens (
 );
 
 -- ────────────────────────────────────────────────
--- 3. Registered Figma webhooks (one per team)
+-- 3. Registered Figma webhooks (file context, one per user+file)
 -- ────────────────────────────────────────────────
+-- Webhooks are registered with the registrant's own Figma OAuth token on the
+-- "file" context, so each (user, file) pair has its own webhook. `figma_team_id`
+-- is kept only for backward compatibility with any legacy team-context rows.
 CREATE TABLE figma_webhooks (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  figma_team_id   TEXT NOT NULL UNIQUE,
+  figma_user_id   TEXT,
+  context         TEXT,                       -- 'file' (legacy rows may be NULL)
+  context_id      TEXT,                       -- the Figma file key for file context
+  figma_team_id   TEXT,                       -- legacy / unused for file context
   webhook_id      TEXT NOT NULL,
   passcode        TEXT NOT NULL,
   registered_by   TEXT,
@@ -48,6 +54,8 @@ CREATE TABLE figma_webhooks (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_webhooks_webhook_id ON figma_webhooks(webhook_id);
+CREATE INDEX idx_webhooks_context_id ON figma_webhooks(context_id);
+CREATE UNIQUE INDEX uq_webhooks_user_context ON figma_webhooks(figma_user_id, context_id);
 
 -- ────────────────────────────────────────────────
 -- 4. Core config: file → Slack channel mapping
@@ -55,7 +63,7 @@ CREATE INDEX idx_webhooks_webhook_id ON figma_webhooks(webhook_id);
 CREATE TABLE configurations (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   figma_user_id   TEXT NOT NULL,
-  figma_team_id   TEXT NOT NULL,
+  figma_team_id   TEXT,                        -- unused for file-context webhooks
   figma_file_key  TEXT NOT NULL,
   figma_file_name TEXT,
   slack_team_id   TEXT NOT NULL REFERENCES slack_installations(slack_team_id) ON DELETE CASCADE,
@@ -90,12 +98,14 @@ CREATE TABLE notification_log (
   configuration_id  UUID REFERENCES configurations(id) ON DELETE SET NULL,
   figma_file_key    TEXT,
   event_type        TEXT,
+  event_key         TEXT,                      -- per-channel webhook dedupe key
   slack_channel_id  TEXT,
   status            TEXT CHECK (status IN ('sent','failed')),
   error_message     TEXT,
   payload_summary   JSONB,
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX idx_log_event_dedupe ON notification_log(event_key, configuration_id, slack_channel_id);
 
 -- ────────────────────────────────────────────────
 -- 7. Webhook idempotency — dedupe Figma's retries

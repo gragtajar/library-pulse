@@ -18,12 +18,13 @@ const MAX_DESCRIPTION_CHARS = 1500;
  * @param {string} fileKey
  */
 export function buildSlackBlocks(payload, fileKey) {
-  const publisher =
-    payload.triggered_by?.handle ||
-    payload.triggered_by?.email ||
-    "Unknown user";
-  const description =
-    typeof payload.description === "string" ? payload.description.trim() : "";
+  // Figma's LIBRARY_PUBLISH payload only carries triggered_by.{id, handle} —
+  // no email (verified against Figma's webhook docs). Prefer email in case
+  // Figma ever adds it; otherwise the handle (display name) is what identifies
+  // the publisher. The webhook fires for ANY editor who publishes the file, so
+  // this correctly reflects whoever actually published, not who set it up.
+  const publisher = payload.triggered_by?.email || payload.triggered_by?.handle || "Unknown user";
+  const description = typeof payload.description === "string" ? payload.description.trim() : "";
   const fileName = payload.file_name || "Untitled";
   const timestamp = payload.timestamp
     ? new Date(payload.timestamp).toLocaleString("en-US", {
@@ -132,9 +133,7 @@ export function buildSlackBlocks(payload, fileKey) {
   // ── Footer ──
   blocks.push({
     type: "context",
-    elements: [
-      { type: "mrkdwn", text: `<${figmaLink}|Open in Figma> · Library Pulse` },
-    ],
+    elements: [{ type: "mrkdwn", text: `<${figmaLink}|Open in Figma> · Library Pulse` }],
   });
 
   return blocks;
@@ -167,7 +166,6 @@ function fmtItems(items) {
  */
 export function fallbackText(payload) {
   const fileName = payload.file_name || "a Figma library";
-  const publisher =
-    payload.triggered_by?.handle || payload.triggered_by?.email || "Someone";
+  const publisher = payload.triggered_by?.email || payload.triggered_by?.handle || "Someone";
   return `📦 ${publisher} published changes to ${fileName}`;
 }

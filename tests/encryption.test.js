@@ -4,8 +4,7 @@ import { encrypt, decrypt } from "../backend/lib/encryption.js";
 
 beforeAll(() => {
   // 32 random bytes hex-encoded. Deterministic for tests.
-  process.env.ENCRYPTION_KEY =
-    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  process.env.ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 });
 
 describe("encryption", () => {
@@ -14,7 +13,7 @@ describe("encryption", () => {
       "xoxb-1234567890-abcdef",
       "🔐 token with emoji",
       "a".repeat(2048),
-      "{\"json\":\"payload\",\"n\":42}",
+      '{"json":"payload","n":42}',
     ];
     for (const s of samples) {
       const ct = encrypt(s);

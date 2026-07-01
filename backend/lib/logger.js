@@ -12,8 +12,6 @@
  *   logger.error("upstream_error", { url, err });
  */
 
-const LEVELS = /** @type {const} */ (["debug", "info", "warn", "error"]);
-
 const LEVEL_ORDER = { debug: 10, info: 20, warn: 30, error: 40 };
 const MIN_LEVEL =
   LEVEL_ORDER[/** @type {keyof typeof LEVEL_ORDER} */ (process.env.LOG_LEVEL ?? "info")] ??
@@ -57,7 +55,7 @@ function redact(value) {
 }
 
 /**
- * @param {typeof LEVELS[number]} level
+ * @param {"debug"|"info"|"warn"|"error"} level
  * @param {string} event
  * @param {Record<string, unknown>} [fields]
  */
@@ -71,10 +69,8 @@ function emit(level, event, fields) {
   };
   const line = JSON.stringify(record);
   if (level === "error" || level === "warn") {
-    // eslint-disable-next-line no-console -- structured stderr is the channel
     console.error(line);
   } else {
-    // eslint-disable-next-line no-console -- structured stdout is the channel
     console.log(line);
   }
 }

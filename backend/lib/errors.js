@@ -19,6 +19,7 @@ export class LibraryPulseError extends Error {
 }
 
 export class ValidationError extends LibraryPulseError {
+  /** @override */
   status = 400;
   /** @param {string} message */
   constructor(message) {
@@ -28,22 +29,30 @@ export class ValidationError extends LibraryPulseError {
 }
 
 export class AuthError extends LibraryPulseError {
+  /** @override */
   status = 401;
+  /** @override */
   publicMessage = "Authentication required";
 }
 
 export class ForbiddenError extends LibraryPulseError {
+  /** @override */
   status = 403;
+  /** @override */
   publicMessage = "Forbidden";
 }
 
 export class NotFoundError extends LibraryPulseError {
+  /** @override */
   status = 404;
+  /** @override */
   publicMessage = "Not found";
 }
 
 export class UpstreamError extends LibraryPulseError {
+  /** @override */
   status = 502;
+  /** @override */
   publicMessage = "Upstream service error";
 }
 
