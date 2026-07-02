@@ -1,12 +1,13 @@
 # Library Pulse
 
 [![CI](https://github.com/gragtajar/library-pulse/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/gragtajar/library-pulse/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/gragtajar/library-pulse/actions/workflows/codeql.yml/badge.svg)](https://github.com/gragtajar/library-pulse/actions/workflows/codeql.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 **Figma plugin that sends rich Slack notifications whenever a Figma library is published.**
 
 When someone on your team publishes changes to a Figma library (components, styles, variables), Library Pulse posts a detailed Slack message listing everything that was added, modified, or removed — along with who published and the description they entered.
+
+> **Install:** _Library Pulse is currently in review on the Figma Community._ Once approved, the listing URL goes here.
 
 ---
 
@@ -14,7 +15,7 @@ When someone on your team publishes changes to a Figma library (components, styl
 
 - [Architecture overview](./ARCHITECTURE.md) — three runtimes, data flow, security boundaries
 - [Contributing guide](./CONTRIBUTING.md) — setup, branching, PR checklist
-- [Security policy](./SECURITY.md) — how to report a vulnerability
+- [Security & privacy policy](./SECURITY.md) — data handling and how to report a vulnerability
 - [Architecture Decision Records](./docs/adrs/)
 - [Runbooks](./docs/runbooks/) — rollback, incident response, key rotation
 - [Figma-plugin best practices](./docs/FIGMA-PLUGIN-BEST-PRACTICES.md) — 10 patterns this codebase enforces
@@ -43,9 +44,11 @@ When someone on your team publishes changes to a Figma library (components, styl
 
 **Three components:**
 
-1. **Figma Plugin** — runs inside Figma; handles Slack OAuth, file selection, and channel configuration.
+1. **Figma Plugin** — runs inside Figma; handles Figma + Slack OAuth, file selection, and channel configuration.
 2. **Vercel Backend** — serverless functions for OAuth callbacks, configuration CRUD, and receiving Figma webhook events.
 3. **Supabase Database** — stores encrypted Slack bot tokens, Figma OAuth tokens, webhook registrations, and user configurations.
+
+Each user authorizes Figma with a single scope (`webhooks:write`), and the backend registers a **file-context** `LIBRARY_PUBLISH` webhook on the specific file they select, using their own access. There is no shared admin token and no team-admin requirement.
 
 ---
 
@@ -67,8 +70,9 @@ Before setting up Library Pulse, you'll need accounts/apps on these services:
 ### 1. Create the Supabase Database
 
 1. Create a new Supabase project.
-2. Go to the SQL Editor and run the contents of `database/schema.sql`.
-3. Note your **Project URL** and **Service Role Key** from Settings → API.
+2. Go to the SQL Editor and run the contents of `database/schema.sql` (canonical full schema for a fresh install).
+3. If you are upgrading an existing database, apply the incremental files in `database/migrations/` in order instead.
+4. Note your **Project URL** and **Service Role Key** from Settings → API.
 
 ### 2. Create the Slack App
 
@@ -89,7 +93,7 @@ Before setting up Library Pulse, you'll need accounts/apps on these services:
 
 1. Go to [figma.com/developers/apps](https://www.figma.com/developers/apps) → **Create a new app**.
 2. Add an OAuth **redirect URL**: `https://YOUR-VERCEL-DOMAIN/api/auth/figma-callback`.
-3. Ensure the app can request the `webhooks:write` scope (plus a file-read scope).
+3. On the **OAuth scopes** page, select **only** `webhooks:write`. (That is the only Figma API the backend calls — it never reads file contents.)
 4. Note the **Client ID** and **Client Secret** — you'll set them as `FIGMA_CLIENT_ID` / `FIGMA_CLIENT_SECRET`.
 
 Each installer authorizes this app once; the backend then registers a `LIBRARY_PUBLISH` webhook on **their** selected file using **their** authorization. No team-admin rights and no shared token are required — only edit access to the file (which the user already has).
@@ -130,22 +134,20 @@ Each installer authorizes this app once; the backend then registers a `LIBRARY_P
    vercel --prod
    ```
 
-5. Update your Slack app redirect URL with the actual Vercel domain.
+5. Update your Slack and Figma app redirect URLs with the actual Vercel domain.
 
 ### 5. Install the Figma Plugin
 
 **For development:**
 
-1. Open Figma → Plugins → Development → Import plugin from manifest.
-2. Select `figma-plugin/manifest.json`.
-3. Update `API_BASE` in `ui.html` to your Vercel deployment URL.
+1. Set `API_BASE` in `figma-plugin/ui.html` to your Vercel deployment URL, and make sure your domain is in `manifest.json` → `networkAccess.allowedDomains`.
+2. Open Figma → Plugins → Development → Import plugin from manifest.
+3. Select `figma-plugin/manifest.json`.
 
 **For public distribution:**
 
-1. Go to your Figma plugin's listing page.
-2. Upload the plugin files.
-3. Submit for Figma Community review.
-4. Update `manifest.json` with the actual plugin ID assigned by Figma.
+1. In the Figma desktop app: Plugins → Manage plugins → **Publish**. This uploads the plugin (`manifest.json`, `code.js`, `ui.html`) to Figma for review — you do not host the plugin code yourself.
+2. Publishing your public **OAuth app** (with the `webhooks:write` scope) is a separate submission at [figma.com/developers/apps](https://www.figma.com/developers/apps).
 
 ---
 
@@ -153,17 +155,17 @@ Each installer authorizes this app once; the backend then registers a `LIBRARY_P
 
 ### First-time setup (in the plugin)
 
-1. **Connect Slack** — OAuth flow opens in your browser. Authorize Library Pulse to post messages.
-2. **Connect Figma** — authorize Library Pulse to watch your file. Needs only edit access to the file, not team-admin.
-3. **Select a file** — use the current file or enter a file ID/URL manually.
+1. **Open the plugin** — it connects your Figma account automatically. A browser tab opens once so you can authorize the app (scope: `webhooks:write`); no need to sign in again.
+2. **Connect Slack** — OAuth flow opens in your browser. Authorize Library Pulse to post messages.
+3. **Select a file** — the current file is auto-detected, or you can paste a file key/URL.
 4. **Add Slack channels** — enter 1–3 channel IDs where notifications should be posted.
 5. **Save & Activate** — the backend registers a `LIBRARY_PUBLISH` webhook on that file using your Figma authorization.
 
 ### When a library is published
 
 1. Figma fires a `LIBRARY_PUBLISH` webhook event for that file.
-2. The backend verifies the passcode (bound to the webhook's owner + file), then looks up that owner's active configurations for the file.
-3. For each configuration, it decrypts the stored Slack bot token and posts a rich Block Kit message to the configured channels.
+2. The backend verifies the passcode (bound to the specific webhook, its owner, and its file), then looks up that owner's active configurations for the file.
+3. For each configuration, it decrypts the stored Slack bot token and posts a rich Block Kit message to the configured channels (de-duplicated per channel so retries never double-post).
 4. Each notification is logged to the `notification_log` table.
 
 ---
@@ -198,12 +200,14 @@ Open in Figma · Library Pulse
 
 ## Security
 
-- **Slack bot tokens** are encrypted with AES-256-GCM before storage. The encryption key never leaves Vercel environment variables.
-- **Figma access is per-user OAuth.** Each user's token is encrypted at rest and used only to register a webhook on their own file — there is no shared admin token.
-- **Config API calls are authenticated** with a signed (HMAC) session token minted after Figma OAuth, so a user can only read or change their own configurations.
-- **Webhook passcodes** are randomly generated per team and verified on every incoming event.
-- **OAuth state parameters** are validated to prevent CSRF attacks. Sessions expire after 10 minutes.
-- **Row-Level Security** is enabled on all Supabase tables. The backend uses the service role key.
+- **Least privilege:** the plugin requests a single Figma scope, `webhooks:write`, and never reads file contents.
+- **Encrypted at rest:** Slack bot tokens and Figma OAuth tokens are encrypted with AES-256-GCM. The encryption key lives only in a Vercel environment variable.
+- **Real API auth:** config API calls are authenticated with a signed (HMAC-SHA256) session token minted after Figma OAuth and bound to the Figma user id, so a user can only read or change their own configuration.
+- **Webhook authenticity & isolation:** each file webhook has its own high-entropy passcode, verified with a constant-time compare; a valid webhook can only post to the configuration owned by the user who registered it, for the exact file it was registered on.
+- **CSRF / replay protection:** OAuth `state` is single-use and expires after 10 minutes; webhook retries are de-duplicated.
+- **Row-Level Security** is enabled on all Supabase tables; the backend uses the service-role key.
+
+See [SECURITY.md](./SECURITY.md) for the full policy and threat model.
 
 ---
 
@@ -225,11 +229,11 @@ Open in Figma · Library Pulse
 
 ## Known Limitations
 
-1. **Variables/Tokens**: Figma's `LIBRARY_PUBLISH` webhook may not itemize individual variable changes yet. The handler is pre-coded to support `created_variables`, `modified_variables`, and `deleted_variables` when Figma adds them.
+1. **Publishing requires a paid Figma plan.** Registering the webhook and running the plugin work on any account, but _publishing_ a Figma library (which fires the event) is a paid-plan Figma feature. The plugin itself is free.
 
-2. **File-context webhooks**: Each config registers a webhook on its specific library file (Figma allows up to 3 webhooks per file). The publisher must have edit access to that file — which they do, since it's their library.
+2. **File-context webhooks.** Each config registers a webhook on its specific library file (Figma allows up to 3 webhooks per file). The publisher needs edit access to that file — which they have, since it's their library.
 
-3. **Figma token expiry**: Webhook registration uses the user's OAuth token. If it has expired, the plugin asks them to reconnect Figma before saving. (Automatic refresh is a planned follow-up.)
+3. **Figma token expiry.** Webhook registration uses the user's OAuth token. If it has expired, the plugin asks them to reconnect Figma before saving. (Automatic refresh is a planned follow-up.)
 
 ---
 
@@ -238,28 +242,45 @@ Open in Figma · Library Pulse
 ```
 library-pulse/
 ├── figma-plugin/
-│   ├── manifest.json      Figma plugin manifest
-│   ├── code.js            Plugin sandbox code (Figma API access)
-│   └── ui.html            Plugin UI (HTML + CSS + JS)
+│   ├── manifest.json      Figma plugin manifest (network allow-list, plugin id)
+│   ├── code.js            Plugin sandbox (Figma API access; no network/DOM)
+│   └── ui.html            Plugin UI (HTML + CSS + JS; talks to the backend)
 ├── backend/
 │   ├── api/
 │   │   ├── auth/
 │   │   │   ├── slack.js           Slack OAuth initiation
 │   │   │   ├── slack-callback.js  Slack OAuth callback
-│   │   │   ├── figma.js           Figma OAuth initiation (optional)
-│   │   │   └── figma-callback.js  Figma OAuth callback (optional)
+│   │   │   ├── figma.js           Figma OAuth initiation
+│   │   │   └── figma-callback.js  Figma OAuth callback (mints the session token)
 │   │   ├── auth-status.js         Poll OAuth completion
-│   │   ├── config.js              CRUD for configurations
-│   │   ├── webhook.js             Figma webhook receiver
+│   │   ├── config.js              Config CRUD + file-webhook registration/teardown
+│   │   ├── webhook.js             Figma LIBRARY_PUBLISH receiver → Slack fan-out
 │   │   └── health.js              Health check
 │   ├── lib/
 │   │   ├── supabase.js            Supabase client
+│   │   ├── session.js             HMAC-signed session tokens
+│   │   ├── auth-session.js        OAuth state lifecycle (atomic claim)
 │   │   ├── encryption.js          AES-256-GCM helpers
-│   │   └── slack-blocks.js        Slack Block Kit builder
+│   │   ├── idempotency.js         Per-channel delivery de-dupe (notification_log)
+│   │   ├── slack-blocks.js        Slack Block Kit builder
+│   │   ├── validators.js          Input validation
+│   │   ├── http.js / errors.js / logger.js / types.js
+│   │   └── oauth-result-page.js   Escaped OAuth result page
 │   ├── package.json
 │   └── vercel.json
 ├── database/
-│   └── schema.sql                 Supabase migration
+│   ├── schema.sql                 Canonical full schema (fresh installs)
+│   └── migrations/                Incremental migrations (existing installs)
+├── tests/                         Vitest unit tests
+├── docs/                          ADRs + runbooks
 ├── .env.example                   Environment variable template
 └── README.md
 ```
+
+---
+
+## Support
+
+Questions or issues: **rajatgarg1809@gmail.com**. Security reports: see [SECURITY.md](./SECURITY.md).
+
+Licensed under [MIT](./LICENSE).
