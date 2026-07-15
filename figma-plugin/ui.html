@@ -22,8 +22,11 @@
         color: var(--figma-color-text, #333);
         background: var(--figma-color-bg, #fff);
         line-height: 1.5;
-        padding: 16px;
-        overflow-y: auto;
+        /* Fixed-size plugin window: pin header + footer, scroll only the middle. */
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
       }
 
       /* ── Typography ── */
@@ -297,6 +300,34 @@
         display: block;
       }
 
+      /* ── Persistent chrome: fixed header + footer, scrollable middle ── */
+      .app-header {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--figma-color-border, #e5e5e5);
+        background: var(--figma-color-bg, #fff);
+      }
+      .app-header h1 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .app-main {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 16px;
+      }
+      .app-footer {
+        flex: 0 0 auto;
+        padding: 12px 16px;
+        border-top: 1px solid var(--figma-color-border, #e5e5e5);
+        background: var(--figma-color-bg, #fff);
+      }
+
       /* ── Dashboard specifics ── */
       .dash-row {
         display: flex;
@@ -362,209 +393,209 @@
     <!-- ════════════════════════════════════════ -->
     <!--  LOADING VIEW                           -->
     <!-- ════════════════════════════════════════ -->
-    <div id="view-loading" class="view active" style="text-align: center; padding-top: 100px">
-      <div class="spinner" style="width: 28px; height: 28px; margin: 0 auto 16px"></div>
-      <p style="color: var(--figma-color-text-secondary, #999)">Loading Library Pulse…</p>
-    </div>
-
-    <!-- ════════════════════════════════════════ -->
-    <!--  SETUP VIEW                             -->
-    <!-- ════════════════════════════════════════ -->
-    <div id="view-setup" class="view">
+    <header class="app-header">
       <h1>Library Pulse</h1>
-      <p class="subtitle">Get Slack notifications when your Figma library is published.</p>
+      <span class="badge badge-success" id="dash-status-badge" style="display: none">Active</span>
+    </header>
 
-      <!-- Figma account — connected automatically from your Figma login -->
-      <div class="step" id="figma-banner">
-        <div class="step-num active" id="figma-banner-icon">
-          <span class="spinner" style="width: 12px; height: 12px; border-width: 2px"></span>
-        </div>
-        <div class="step-content">
-          <div class="step-title" id="figma-banner-title">Connecting your Figma account…</div>
-          <div class="step-desc" id="figma-banner-desc">
-            We use your existing Figma login to watch your library for publishes. A browser tab may
-            open once to confirm access — no need to sign in again.
-          </div>
-          <button
-            class="btn btn-secondary btn-sm"
-            id="btn-figma-retry"
-            onclick="startFigmaAuto()"
-            style="display: none"
-          >
-            Retry
-          </button>
-        </div>
+    <main class="app-main" id="app-main">
+      <div id="view-loading" class="view active" style="text-align: center; padding-top: 80px">
+        <div class="spinner" style="width: 28px; height: 28px; margin: 0 auto 16px"></div>
+        <p style="color: var(--figma-color-text-secondary, #999)">Loading Library Pulse…</p>
       </div>
 
-      <!-- Step 1: Connect Slack -->
-      <div class="step" id="step-slack">
-        <div class="step-num active" id="step-slack-num">1</div>
-        <div class="step-content">
-          <div class="step-title">Connect Slack</div>
-          <div class="step-desc">
-            Authorize Library Pulse to post messages to your Slack workspace.
+      <!-- ════════════════════════════════════════ -->
+      <!--  SETUP VIEW                             -->
+      <!-- ════════════════════════════════════════ -->
+      <div id="view-setup" class="view">
+        <p class="subtitle">Get Slack notifications when your Figma library is published.</p>
+
+        <!-- Figma account — connected automatically from your Figma login -->
+        <div class="step" id="figma-banner">
+          <div class="step-num active" id="figma-banner-icon">
+            <span class="spinner" style="width: 12px; height: 12px; border-width: 2px"></span>
           </div>
-          <button class="btn btn-secondary" id="btn-connect-slack" onclick="connectSlack()">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path
-                d="M3.36 10.04a1.68 1.68 0 1 1-1.68-1.68h1.68v1.68zm.84 0a1.68 1.68 0 1 1 3.36 0v4.28a1.68 1.68 0 1 1-3.36 0v-4.28zM5.96 3.36a1.68 1.68 0 1 1 1.68-1.68v1.68H5.96zm0 .84a1.68 1.68 0 0 1 0 3.36H1.68a1.68 1.68 0 0 1 0-3.36h4.28zM12.64 5.96a1.68 1.68 0 1 1 1.68 1.68h-1.68V5.96zm-.84 0a1.68 1.68 0 0 1-3.36 0V1.68a1.68 1.68 0 0 1 3.36 0v4.28zM10.04 12.64a1.68 1.68 0 1 1-1.68 1.68v-1.68h1.68zm0-.84a1.68 1.68 0 0 1 0-3.36h4.28a1.68 1.68 0 0 1 0 3.36h-4.28z"
-                fill="#E01E5A"
-              />
-            </svg>
-            Connect to Slack
-          </button>
-          <div id="slack-status" style="margin-top: 8px"></div>
-        </div>
-      </div>
-
-      <!-- Step 2: Configure -->
-      <div class="step" id="step-config">
-        <div class="step-num pending" id="step-config-num">2</div>
-        <div class="step-content">
-          <div class="step-title">Configure</div>
-          <div class="step-desc">Select a Figma file and Slack channels.</div>
-
-          <div id="config-form" style="opacity: 0.5; pointer-events: none">
-            <!-- File selection -->
-            <div class="section">
-              <h2>Figma File</h2>
-
-              <div
-                class="file-option selected"
-                id="opt-current"
-                onclick="selectFileOption('current')"
-              >
-                <div class="radio"></div>
-                <div class="file-info">
-                  <div class="file-name" id="current-file-name">Loading…</div>
-                  <div class="file-key" id="current-file-key">—</div>
-                </div>
-                <span class="badge badge-success" style="font-size: 10px">Current file</span>
-              </div>
-
-              <div class="file-option" id="opt-manual" onclick="selectFileOption('manual')">
-                <div class="radio"></div>
-                <div class="file-info">
-                  <div class="file-name">Enter file ID manually</div>
-                  <div class="file-key">Use a different file</div>
-                </div>
-              </div>
-
-              <div id="manual-input-wrap" style="display: none; margin-top: 8px">
-                <div class="input-group">
-                  <label>File ID or URL</label>
-                  <input
-                    type="text"
-                    id="input-file-id"
-                    placeholder="e.g. jxunc0ljQa3mKVki8K5kj9 or full Figma URL"
-                  />
-                  <div class="hint">
-                    Paste the file key from the URL: figma.com/file/<strong>THIS_PART</strong>/…
-                  </div>
-                </div>
-                <div class="input-group">
-                  <label>File name (optional)</label>
-                  <input type="text" id="input-file-name" placeholder="e.g. My Design System" />
-                </div>
-              </div>
+          <div class="step-content">
+            <div class="step-title" id="figma-banner-title">Connecting your Figma account…</div>
+            <div class="step-desc" id="figma-banner-desc">
+              We use your existing Figma login to watch your library for publishes. A browser tab
+              may open once to confirm access — no need to sign in again.
             </div>
-
-            <hr class="divider" />
-
-            <!-- Channel entry -->
-            <div class="section">
-              <h2>
-                Slack Channels
-                <span style="font-weight: 400; color: var(--figma-color-text-tertiary, #b3b3b3)"
-                  >(1–3)</span
-                >
-              </h2>
-
-              <div class="channels-list" id="channels-list"></div>
-
-              <div style="display: flex; gap: 6px" id="channel-add-row">
-                <div class="input-group" style="flex: 1; margin-bottom: 0">
-                  <input
-                    type="text"
-                    id="input-channel"
-                    placeholder="Channel ID (e.g. C046B2FRZ8W)"
-                  />
-                </div>
-                <button
-                  class="btn btn-secondary btn-sm"
-                  onclick="addChannel()"
-                  id="btn-add-channel"
-                  style="height: 33px; margin-top: 0"
-                >
-                  Add
-                </button>
-              </div>
-              <div class="hint" style="margin-top: 4px">
-                Right-click a Slack channel → View channel details → scroll to find Channel ID.
-              </div>
-            </div>
-
-            <hr class="divider" />
-
-            <!-- Save -->
-            <button class="btn btn-primary" id="btn-save" onclick="saveConfig()" disabled>
-              Save &amp; Activate
+            <button
+              class="btn btn-secondary btn-sm"
+              id="btn-figma-retry"
+              onclick="startFigmaAuto()"
+              style="display: none"
+            >
+              Retry
             </button>
           </div>
         </div>
+
+        <!-- Step 1: Connect Slack -->
+        <div class="step" id="step-slack">
+          <div class="step-num active" id="step-slack-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Connect Slack</div>
+            <div class="step-desc">
+              Authorize Library Pulse to post messages to your Slack workspace.
+            </div>
+            <button class="btn btn-secondary" id="btn-connect-slack" onclick="connectSlack()">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path
+                  d="M3.36 10.04a1.68 1.68 0 1 1-1.68-1.68h1.68v1.68zm.84 0a1.68 1.68 0 1 1 3.36 0v4.28a1.68 1.68 0 1 1-3.36 0v-4.28zM5.96 3.36a1.68 1.68 0 1 1 1.68-1.68v1.68H5.96zm0 .84a1.68 1.68 0 0 1 0 3.36H1.68a1.68 1.68 0 0 1 0-3.36h4.28zM12.64 5.96a1.68 1.68 0 1 1 1.68 1.68h-1.68V5.96zm-.84 0a1.68 1.68 0 0 1-3.36 0V1.68a1.68 1.68 0 0 1 3.36 0v4.28zM10.04 12.64a1.68 1.68 0 1 1-1.68 1.68v-1.68h1.68zm0-.84a1.68 1.68 0 0 1 0-3.36h4.28a1.68 1.68 0 0 1 0 3.36h-4.28z"
+                  fill="#E01E5A"
+                />
+              </svg>
+              Connect to Slack
+            </button>
+            <div id="slack-status" style="margin-top: 8px"></div>
+          </div>
+        </div>
+
+        <!-- Step 2: Configure -->
+        <div class="step" id="step-config">
+          <div class="step-num pending" id="step-config-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Configure</div>
+            <div class="step-desc">Select a Figma file and Slack channels.</div>
+
+            <div id="config-form" style="opacity: 0.5; pointer-events: none">
+              <!-- File selection -->
+              <div class="section">
+                <h2>Figma File</h2>
+
+                <div
+                  class="file-option selected"
+                  id="opt-current"
+                  onclick="selectFileOption('current')"
+                >
+                  <div class="radio"></div>
+                  <div class="file-info">
+                    <div class="file-name" id="current-file-name">Loading…</div>
+                    <div class="file-key" id="current-file-key">—</div>
+                  </div>
+                  <span class="badge badge-success" style="font-size: 10px">Current file</span>
+                </div>
+
+                <div class="file-option" id="opt-manual" onclick="selectFileOption('manual')">
+                  <div class="radio"></div>
+                  <div class="file-info">
+                    <div class="file-name">Enter file ID manually</div>
+                    <div class="file-key">Use a different file</div>
+                  </div>
+                </div>
+
+                <div id="manual-input-wrap" style="display: none; margin-top: 8px">
+                  <div class="input-group">
+                    <label>File ID or URL</label>
+                    <input
+                      type="text"
+                      id="input-file-id"
+                      placeholder="e.g. jxunc0ljQa3mKVki8K5kj9 or full Figma URL"
+                    />
+                    <div class="hint">
+                      Paste the file key from the URL: figma.com/file/<strong>THIS_PART</strong>/…
+                    </div>
+                  </div>
+                  <div class="input-group">
+                    <label>File name (optional)</label>
+                    <input type="text" id="input-file-name" placeholder="e.g. My Design System" />
+                  </div>
+                </div>
+              </div>
+
+              <hr class="divider" />
+
+              <!-- Channel entry -->
+              <div class="section">
+                <h2>
+                  Slack Channels
+                  <span style="font-weight: 400; color: var(--figma-color-text-tertiary, #b3b3b3)"
+                    >(1–3)</span
+                  >
+                </h2>
+
+                <div class="channels-list" id="channels-list"></div>
+
+                <div style="display: flex; gap: 6px" id="channel-add-row">
+                  <div class="input-group" style="flex: 1; margin-bottom: 0">
+                    <input
+                      type="text"
+                      id="input-channel"
+                      placeholder="Channel ID (e.g. C046B2FRZ8W)"
+                    />
+                  </div>
+                  <button
+                    class="btn btn-secondary btn-sm"
+                    onclick="addChannel()"
+                    id="btn-add-channel"
+                    style="height: 33px; margin-top: 0"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div class="hint" style="margin-top: 4px">
+                  Right-click a Slack channel → View channel details → scroll to find Channel ID.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+
+      <!-- ════════════════════════════════════════ -->
+      <!--  DASHBOARD VIEW                         -->
+      <!-- ════════════════════════════════════════ -->
+      <div id="view-dashboard" class="view">
+        <p class="subtitle">Notifications are flowing.</p>
+
+        <div class="card">
+          <div class="dash-row">
+            <span class="dash-label">Figma File</span>
+            <span class="dash-value" id="dash-file-name">—</span>
+          </div>
+          <div class="dash-row">
+            <span class="dash-label">File Key</span>
+            <span
+              class="dash-value"
+              id="dash-file-key"
+              style="font-family: &quot;SF Mono&quot;, monospace; font-size: 11px"
+              >—</span
+            >
+          </div>
+          <div class="dash-row">
+            <span class="dash-label">Slack Workspace</span>
+            <span class="dash-value" id="dash-slack-workspace">—</span>
+          </div>
+          <div class="dash-row">
+            <span class="dash-label">Channels</span>
+            <span class="dash-value" id="dash-channels">—</span>
+          </div>
+          <div class="dash-row">
+            <span class="dash-label">Webhook</span>
+            <span class="dash-value" id="dash-webhook-status">—</span>
+          </div>
+        </div>
+      </div>
+    </main>
 
     <!-- ════════════════════════════════════════ -->
-    <!--  DASHBOARD VIEW                         -->
+    <!--  STICKY FOOTER — primary action per view  -->
     <!-- ════════════════════════════════════════ -->
-    <div id="view-dashboard" class="view">
-      <div
-        style="
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 4px;
-        "
-      >
-        <h1>Library Pulse</h1>
-        <span class="badge badge-success" id="dash-status-badge">Active</span>
+    <footer class="app-footer" id="app-footer" style="display: none">
+      <div id="footer-setup" class="footer-group">
+        <button class="btn btn-primary" id="btn-save" onclick="saveConfig()" disabled>
+          Save &amp; Activate
+        </button>
       </div>
-      <p class="subtitle">Notifications are flowing.</p>
-
-      <div class="card">
-        <div class="dash-row">
-          <span class="dash-label">Figma File</span>
-          <span class="dash-value" id="dash-file-name">—</span>
-        </div>
-        <div class="dash-row">
-          <span class="dash-label">File Key</span>
-          <span
-            class="dash-value"
-            id="dash-file-key"
-            style="font-family: &quot;SF Mono&quot;, monospace; font-size: 11px"
-            >—</span
-          >
-        </div>
-        <div class="dash-row">
-          <span class="dash-label">Slack Workspace</span>
-          <span class="dash-value" id="dash-slack-workspace">—</span>
-        </div>
-        <div class="dash-row">
-          <span class="dash-label">Channels</span>
-          <span class="dash-value" id="dash-channels">—</span>
-        </div>
-        <div class="dash-row">
-          <span class="dash-label">Webhook</span>
-          <span class="dash-value" id="dash-webhook-status">—</span>
+      <div id="footer-dashboard" class="footer-group" style="display: none">
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="editConfig()">Edit</button>
+          <button class="btn btn-danger" onclick="deleteConfig()">Remove</button>
         </div>
       </div>
-
-      <div class="btn-row" style="margin-top: 16px">
-        <button class="btn btn-secondary" onclick="editConfig()">Edit</button>
-        <button class="btn btn-danger" onclick="deleteConfig()">Remove</button>
-      </div>
-    </div>
+    </footer>
 
     <!-- ════════════════════════════════════════ -->
     <!--  JAVASCRIPT                             -->
@@ -724,6 +755,36 @@
         app.view = name;
         document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
         document.getElementById(`view-${name}`).classList.add("active");
+
+        // Persistent chrome: the sticky footer's action group and the header
+        // status badge are toggled to match the active view.
+        const footer = document.getElementById("app-footer");
+        const footerSetup = document.getElementById("footer-setup");
+        const footerDash = document.getElementById("footer-dashboard");
+        const badge = document.getElementById("dash-status-badge");
+        if (name === "setup") {
+          footer.style.display = "block";
+          footerSetup.style.display = "block";
+          footerDash.style.display = "none";
+          badge.style.display = "none";
+          setSaveLabel();
+        } else if (name === "dashboard") {
+          footer.style.display = "block";
+          footerSetup.style.display = "none";
+          footerDash.style.display = "block";
+          badge.style.display = ""; // revert to .badge's inline-flex
+        } else {
+          // loading (or any other transient view): no footer, no badge.
+          footer.style.display = "none";
+          badge.style.display = "none";
+        }
+      }
+
+      // Footer primary-action label reflects context: first-time setup vs.
+      // editing a config that already exists.
+      function setSaveLabel() {
+        const btn = document.getElementById("btn-save");
+        if (btn) btn.textContent = app.configId ? "Save changes" : "Save & Activate";
       }
 
       // ── Setup state management ──
@@ -1166,7 +1227,7 @@
           showDashboard(config);
         } catch (e) {
           btn.disabled = false;
-          btn.textContent = "Save & Activate";
+          setSaveLabel();
           notify(e.message, true);
         }
       }
