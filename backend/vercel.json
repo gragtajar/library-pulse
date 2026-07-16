@@ -13,6 +13,7 @@
     { "src": "/api/auth/figma-callback", "dest": "/api/auth/figma-callback.js" },
     { "src": "/api/auth-status", "dest": "/api/auth-status.js" },
     { "src": "/api/config", "dest": "/api/config.js" },
+    { "src": "/api/slack/channels", "dest": "/api/slack/channels.js" },
     { "src": "/api/webhook", "dest": "/api/webhook.js" },
     { "src": "/api/health", "dest": "/api/health.js" }
   ],

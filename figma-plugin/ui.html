@@ -210,6 +210,60 @@
         color: #cf222e;
       }
 
+      /* ── Channel picker (searchable dropdown) ── */
+      .channel-picker {
+        position: relative;
+      }
+      .channel-dropdown {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 100%;
+        z-index: 10;
+        max-height: 190px;
+        overflow-y: auto;
+        margin-top: 4px;
+        background: var(--figma-color-bg, #fff);
+        border: 1px solid var(--figma-color-border, #e5e5e5);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      }
+      .channel-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .channel-option:hover {
+        background: var(--figma-color-bg-hover, #f5f5f5);
+      }
+      .channel-option .ch-icon {
+        width: 14px;
+        flex-shrink: 0;
+        text-align: center;
+        color: var(--figma-color-text-tertiary, #b3b3b3);
+      }
+      .channel-option .ch-name {
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .channel-option .ch-count {
+        flex-shrink: 0;
+        font-size: 10px;
+        color: var(--figma-color-text-tertiary, #b3b3b3);
+      }
+      .channel-empty {
+        padding: 10px;
+        font-size: 11px;
+        text-align: center;
+        color: var(--figma-color-text-tertiary, #b3b3b3);
+      }
+
       /* ── File selector ── */
       .file-option {
         display: flex;
@@ -490,25 +544,20 @@
             <div id="config-form" style="opacity: 0.5; pointer-events: none">
               <div class="channels-list" id="channels-list"></div>
 
-              <div style="display: flex; gap: 6px" id="channel-add-row">
-                <div class="input-group" style="flex: 1; margin-bottom: 0">
+              <div class="channel-picker" id="channel-picker">
+                <div class="input-group" style="margin-bottom: 0">
                   <input
                     type="text"
-                    id="input-channel"
-                    placeholder="Channel ID (e.g. C046B2FRZ8W)"
+                    id="channel-search"
+                    placeholder="Search channels…"
+                    autocomplete="off"
                   />
                 </div>
-                <button
-                  class="btn btn-secondary btn-sm"
-                  onclick="addChannel()"
-                  id="btn-add-channel"
-                  style="height: 33px; margin-top: 0"
-                >
-                  Add
-                </button>
+                <div class="channel-dropdown" id="channel-dropdown" style="display: none"></div>
               </div>
               <div class="hint" style="margin-top: 4px">
-                Right-click a Slack channel → View channel details → scroll to find Channel ID.
+                Pick up to 3 channels. Private channels appear only if the Library Pulse bot has
+                been added to them.
               </div>
             </div>
           </div>
@@ -622,6 +671,11 @@
         configId: null,
         isOwner: false,
         currentConfig: null,
+        allChannels: [],
+        channelsLoaded: false,
+        channelsLoading: false,
+        channelsError: null,
+        channelsForKey: null,
       };
 
       // ── Figma plugin message bus ──
@@ -1078,44 +1132,134 @@
       }
 
       // ── Channel management ──
-      function addChannel() {
-        const input = document.getElementById("input-channel");
-        const val = input.value.trim();
-        if (!val) return;
-        if (!SLACK_CHANNEL_ID_RE.test(val)) {
-          notify("Invalid Slack channel ID (expected C…, G…, D…, or MP…)", true);
-          return;
+      // Which workspace the picker should query: an existing config's file, or
+      // the just-connected Slack team during first-time setup.
+      function channelQuery() {
+        if (app.configId)
+          return { key: `f:${app.fileKey}`, qs: `fileKey=${encodeURIComponent(app.fileKey)}` };
+        if (app.slackTeamId)
+          return {
+            key: `t:${app.slackTeamId}`,
+            qs: `slackTeamId=${encodeURIComponent(app.slackTeamId)}`,
+          };
+        return null;
+      }
+
+      async function loadChannels() {
+        const q = channelQuery();
+        if (!q) return;
+        if (app.channelsLoading) return;
+        if (app.channelsLoaded && app.channelsForKey === q.key) return;
+
+        app.channelsLoading = true;
+        app.channelsError = null;
+        app.channelsForKey = q.key;
+        renderDropdown();
+        try {
+          const res = await api(`/api/slack/channels?${q.qs}`);
+          const data = await readJson(res);
+          if (!res.ok) throw new Error(friendlyError(data.error) || "Couldn't load channels");
+          app.allChannels = Array.isArray(data.channels) ? data.channels : [];
+          app.channelsLoaded = true;
+        } catch (e) {
+          app.channelsError = e && e.message ? e.message : "Couldn't load channels";
+        } finally {
+          app.channelsLoading = false;
+          renderDropdown();
         }
-        if (app.channels.length >= 3) {
-          notify("Maximum 3 channels allowed", true);
-          return;
+      }
+
+      function openDropdown() {
+        document.getElementById("channel-dropdown").style.display = "block";
+        loadChannels();
+        renderDropdown();
+      }
+
+      function closeDropdown() {
+        const dd = document.getElementById("channel-dropdown");
+        if (dd) dd.style.display = "none";
+      }
+
+      function emptyRow(text) {
+        const d = document.createElement("div");
+        d.className = "channel-empty";
+        d.textContent = text;
+        return d;
+      }
+
+      function renderDropdown() {
+        const dd = document.getElementById("channel-dropdown");
+        if (!dd || dd.style.display === "none") return;
+        dd.replaceChildren();
+
+        if (app.channelsLoading) return dd.appendChild(emptyRow("Loading channels…"));
+        if (app.channelsError) return dd.appendChild(emptyRow(app.channelsError));
+
+        const filter = (document.getElementById("channel-search").value || "").toLowerCase().trim();
+        const selected = new Set(app.channels.map((c) => c.id));
+        const matches = app.allChannels
+          .filter((c) => !selected.has(c.id))
+          .filter((c) => !filter || (c.name || "").toLowerCase().includes(filter))
+          .slice(0, 50);
+
+        if (matches.length === 0) {
+          return dd.appendChild(
+            emptyRow(app.allChannels.length ? "No matching channels" : "No channels found"),
+          );
         }
-        if (app.channels.some((c) => c.id === val)) {
-          notify("Channel already added", true);
-          return;
+
+        const atMax = app.channels.length >= 3;
+        for (const c of matches) {
+          const opt = document.createElement("div");
+          opt.className = "channel-option";
+          const icon = document.createElement("span");
+          icon.className = "ch-icon";
+          icon.textContent = c.is_private ? "🔒" : "#";
+          const name = document.createElement("span");
+          name.className = "ch-name";
+          name.textContent = c.name || c.id;
+          const count = document.createElement("span");
+          count.className = "ch-count";
+          count.textContent = `${c.num_members || 0} members`;
+          opt.append(icon, name, count);
+          // mousedown (not click) fires before the input's blur, so the pick
+          // registers without the dropdown closing first.
+          opt.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            if (atMax) return notify("Maximum 3 channels allowed", true);
+            selectChannel(c);
+          });
+          dd.appendChild(opt);
         }
-        app.channels.push({ id: val, name: `#${val}` });
-        input.value = "";
+      }
+
+      function selectChannel(c) {
+        if (app.channels.length >= 3) return;
+        if (app.channels.some((x) => x.id === c.id)) return;
+        if (!SLACK_CHANNEL_ID_RE.test(c.id)) return; // defensive
+        app.channels.push({ id: c.id, name: (c.is_private ? "" : "#") + (c.name || c.id) });
+        document.getElementById("channel-search").value = "";
         renderChannels();
+        renderDropdown();
         updateSaveButton();
       }
 
       function removeChannel(id) {
         app.channels = app.channels.filter((c) => c.id !== id);
         renderChannels();
+        renderDropdown();
         updateSaveButton();
       }
 
       function renderChannels() {
-        // Build pills with the DOM API — never interpolate channel IDs into
-        // innerHTML. A malicious / mistyped channel ID containing `'` or `<`
-        // would otherwise become an XSS sink via the onclick attribute.
+        // Build pills with the DOM API — never interpolate channel data into
+        // innerHTML (a channel name could contain markup).
         const list = document.getElementById("channels-list");
         list.replaceChildren();
         app.channels.forEach((c) => {
           const pill = document.createElement("span");
           pill.className = "channel-pill";
-          pill.textContent = c.id;
+          pill.textContent = c.name || c.id;
           const remove = document.createElement("span");
           remove.className = "remove";
           remove.textContent = "×";
@@ -1125,19 +1269,18 @@
           list.appendChild(pill);
         });
 
-        // Hide add row if 3 channels
-        document.getElementById("channel-add-row").style.display =
-          app.channels.length >= 3 ? "none" : "flex";
+        // Hide the search once 3 channels are picked.
+        document.getElementById("channel-picker").style.display =
+          app.channels.length >= 3 ? "none" : "block";
       }
 
-      // Allow pressing Enter to add channel
+      // Wire the channel search box.
       document.addEventListener("DOMContentLoaded", () => {
-        const input = document.getElementById("input-channel");
-        if (input) {
-          input.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") addChannel();
-          });
-        }
+        const search = document.getElementById("channel-search");
+        if (!search) return;
+        search.addEventListener("focus", openDropdown);
+        search.addEventListener("input", renderDropdown);
+        search.addEventListener("blur", () => setTimeout(closeDropdown, 150));
       });
 
       // ── Save button state ──
