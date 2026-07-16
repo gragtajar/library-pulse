@@ -17,9 +17,12 @@
  * Figma user id comes from that token, never the body.
  *
  * Access model (SPEC-batch-2 §0/§4): config is keyed by FILE. Anyone with edit
- * access to a file manages its config. Access is verified with the caller's own
- * Figma token (lib/figma-access.js). Creating/deleting the webhook is edit-gated
- * by Figma for free; GET/PUT/DELETE use the file-access probe.
+ * access to a file manages its config. The original setter (`created_by`) is
+ * trusted without re-probing — they proved edit access at setup, the same trust
+ * as before Batch 2 — so their own flows keep working even before the
+ * `webhooks:read` scope is approved. OTHER users are verified with their own
+ * Figma token (lib/figma-access.js, needs `webhooks:read`). Creating/deleting the
+ * webhook is edit-gated by Figma for free.
  */
 
 import crypto from "node:crypto";
@@ -77,10 +80,9 @@ async function handleGet(req, res) {
   const callerId = requireSession(req);
   const fileKey = queryParam(req, "fileKey");
 
-  // ── New per-file path: the file's shared config, access-checked ──
+  // ── New per-file path: the file's shared config ──
   if (fileKey) {
     assertFigmaFileKey(fileKey);
-    await assertFileAccess(callerId, fileKey);
 
     const { data, error } = await supabase
       .from("configurations")
@@ -93,6 +95,8 @@ async function handleGet(req, res) {
       throw new UpstreamError("config_fetch_failed");
     }
     if (!data) return res.status(200).json({ config: null });
+    // Trust the setter; access-check only OTHER users viewing the shared config.
+    if (data.created_by !== callerId) await assertFileAccess(callerId, fileKey);
     return res.status(200).json({ config: data, isOwner: data.created_by === callerId });
   }
 
@@ -204,8 +208,9 @@ async function handlePut(req, res) {
   const row = await locateConfig(body.id, body.fileKey);
   if (!row) throw new NotFoundError("config_not_found");
 
-  // Any edit-access user may change channels/state on a file's shared config.
-  await assertFileAccess(callerId, row.figma_file_key);
+  // Any edit-access user may change a file's shared config. The setter is trusted
+  // without a probe; other users are access-checked (needs webhooks:read).
+  if (row.created_by !== callerId) await assertFileAccess(callerId, row.figma_file_key);
 
   /** @type {Record<string, unknown>} */
   const updates = {};
@@ -242,7 +247,8 @@ async function handleDelete(req, res) {
   const row = await locateConfig(queryParam(req, "id"), queryParam(req, "fileKey"));
   if (!row) throw new NotFoundError("config_not_found");
 
-  await assertFileAccess(callerId, row.figma_file_key);
+  // Setter is trusted without a probe; other edit-access users are access-checked.
+  if (row.created_by !== callerId) await assertFileAccess(callerId, row.figma_file_key);
 
   // Any edit-access user can turn notifications off. Deactivate rather than
   // hard-delete so the config (and other editors' channels) survive; a webhook
