@@ -519,7 +519,17 @@
       <!--  DASHBOARD VIEW                         -->
       <!-- ════════════════════════════════════════ -->
       <div id="view-dashboard" class="view">
-        <p class="subtitle">Notifications are flowing.</p>
+        <p class="subtitle" id="dash-subtitle">Notifications are flowing.</p>
+
+        <!-- Reconnect banner (shown when delivery_status !== 'ok') -->
+        <div
+          class="card"
+          id="dash-reconnect-banner"
+          style="display: none; border-color: #cf222e; background: #ffebe9"
+        >
+          <div style="font-weight: 600; color: #cf222e; margin-bottom: 2px">Reconnect needed</div>
+          <div style="font-size: 11px; color: #57606a" id="dash-reconnect-desc"></div>
+        </div>
 
         <div class="card">
           <div class="dash-row">
@@ -536,18 +546,16 @@
             >
           </div>
           <div class="dash-row">
-            <span class="dash-label">Slack Workspace</span>
+            <span class="dash-label">Destination</span>
             <span class="dash-value" id="dash-slack-workspace">—</span>
           </div>
           <div class="dash-row">
             <span class="dash-label">Channels</span>
             <span class="dash-value" id="dash-channels">—</span>
           </div>
-          <div class="dash-row">
-            <span class="dash-label">Webhook</span>
-            <span class="dash-value" id="dash-webhook-status">—</span>
-          </div>
         </div>
+
+        <div class="hint" id="dash-shared-note" style="margin-top: 8px"></div>
       </div>
     </main>
 
@@ -562,9 +570,19 @@
       </div>
       <div id="footer-dashboard" class="footer-group" style="display: none">
         <div class="btn-row">
-          <button class="btn btn-secondary" onclick="editConfig()">Edit</button>
-          <button class="btn btn-danger" onclick="deleteConfig()">Remove</button>
+          <button class="btn btn-secondary" onclick="editConfig()">Edit channels</button>
+          <button class="btn btn-secondary" id="btn-toggle-active" onclick="toggleActive()">
+            Disable
+          </button>
         </div>
+        <button
+          class="btn btn-danger"
+          id="btn-remove-figma"
+          onclick="removeFigmaConnection(this)"
+          style="display: none; margin-top: 8px"
+        >
+          Remove Figma connection
+        </button>
       </div>
     </footer>
 
@@ -602,6 +620,8 @@
         sessionToken: null,
         channels: [],
         configId: null,
+        isOwner: false,
+        currentConfig: null,
       };
 
       // ── Figma plugin message bus ──
@@ -657,13 +677,10 @@
         if (app.initialized) return;
         app.initialized = true;
 
-        // Check stored auth state. Read all three in parallel — these are
-        // postMessage round-trips to the sandbox; doing them sequentially added
-        // three hops of latency before the Figma tab could open.
-        const [slackData, figmaData, savedConfig] = await Promise.all([
+        // Read stored auth in parallel (postMessage round-trips to the sandbox).
+        const [slackData, figmaData] = await Promise.all([
           getStorage("slack_auth"),
           getStorage("figma_auth"),
-          getStorage("config_id"),
         ]);
 
         if (slackData) {
@@ -677,42 +694,36 @@
           app.sessionToken = figmaData.session_token;
         }
 
-        // If a Figma session token is already stored, validate it with a cheap
-        // authenticated call BEFORE deciding whether to auto-connect. This is
-        // what makes the "already connected" case correct: a still-valid session
-        // shows the connected banner and does NOT reopen the OAuth tab, while an
-        // expired/invalid one is cleared so auto-connect can re-run.
-        if (app.sessionToken) {
+        // Source of truth is the CURRENT FILE, not a cached config id. With a
+        // stored session, ask the backend for this file's shared config: a config
+        // jumps straight to the shared view, no config falls through to setup, and
+        // a 401 clears the session so auto-connect re-runs.
+        if (app.sessionToken && app.fileKey) {
           try {
-            const res = await api(`/api/config`);
+            const res = await api(`/api/config?fileKey=${encodeURIComponent(app.fileKey)}`);
             if (res.status === 401) {
               app.figmaConnected = false;
               app.sessionToken = null;
               setStorage("figma_auth", null);
-            } else if (savedConfig) {
-              // Session is valid AND we saved a config before → jump to dashboard.
+            } else if (res.ok) {
               const data = await readJson(res);
-              const config = (data.configurations || []).find((c) => c.id === savedConfig);
-              if (config && config.is_active) {
-                app.configId = config.id;
-                showDashboard(config);
+              if (data.config) {
+                showSharedConfig(data.config, data.isOwner === true);
                 return;
               }
             }
+            // Other statuses (e.g. figma_reauth_required) fall through to setup,
+            // where the Figma banner / reconnect guides the user.
           } catch (e) {
-            // Network hiccup — keep the stored session and show "connected"
-            // optimistically rather than forcing a needless re-auth.
-            console.warn("Session validation skipped (network):", e);
+            // Network hiccup — show setup rather than forcing a needless re-auth.
+            console.warn("Config load skipped (network):", e);
           }
         }
 
-        // Show setup
         updateSetupState();
         showView("setup");
 
-        // Auto-connect on open — but only when NOT already connected. A valid
-        // stored session shows "Figma connected as …" with no re-prompt;
-        // otherwise start the one-time OAuth.
+        // Auto-connect on open — but only when NOT already connected.
         if (app.figmaConnected) {
           markFigmaConnected();
         } else {
@@ -1146,32 +1157,41 @@
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner"></span> Saving…';
 
-        const fileKey = app.fileKey;
-        const fileName = app.fileName;
+        // Editing an existing config → PUT (any edit-access user); first-time
+        // setup → POST (create).
+        const editing = !!app.configId;
 
         try {
           const res = await api(`/api/config`, {
-            method: "POST",
-            body: JSON.stringify({
-              figmaUserId: app.currentUser?.id,
-              fileKey,
-              fileName,
-              slackTeamId: app.slackTeamId,
-              channels: app.channels,
-            }),
+            method: editing ? "PUT" : "POST",
+            body: JSON.stringify(
+              editing
+                ? { fileKey: app.fileKey, channels: app.channels }
+                : {
+                    figmaUserId: app.currentUser?.id,
+                    fileKey: app.fileKey,
+                    fileName: app.fileName,
+                    slackTeamId: app.slackTeamId,
+                    channels: app.channels,
+                  },
+            ),
           });
 
           if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || "Save failed");
+            const err = await readJson(res);
+            // A create that raced another setter returns 409 + the existing config.
+            if (res.status === 409 && err.config) {
+              notify("This file is already set up — showing the shared config.");
+              showSharedConfig(err.config, err.isOwner === true);
+              return;
+            }
+            throw new Error(friendlyError(err.error) || "Save failed");
           }
 
-          const config = await res.json();
-          app.configId = config.id;
+          const config = await readJson(res);
           setStorage("config_id", config.id);
-
-          notify("Configuration saved! Notifications are active.");
-          showDashboard(config);
+          notify(editing ? "Channels updated." : "Configuration saved! Notifications are active.");
+          showSharedConfig(config, config.isOwner === true);
         } catch (e) {
           btn.disabled = false;
           setSaveLabel();
@@ -1179,66 +1199,176 @@
         }
       }
 
-      // ── Dashboard ──
-      function showDashboard(config) {
+      // ── Shared config view (org-shared, per file) ──
+      function showSharedConfig(config, isOwner) {
+        app.currentConfig = config;
+        app.configId = config.id;
+        app.isOwner = isOwner;
+        app.channels = (config.channels || []).map((c) =>
+          typeof c === "string" ? { id: c } : { id: c.id, name: c.name },
+        );
+        if (config.slack_team_id) app.slackTeamId = config.slack_team_id;
+
         document.getElementById("dash-file-name").textContent =
           config.figma_file_name || config.figma_file_key;
         document.getElementById("dash-file-key").textContent = config.figma_file_key;
         document.getElementById("dash-slack-workspace").textContent =
-          config.slack_installations?.slack_team_name || app.slackTeamName || config.slack_team_id;
-        document.getElementById("dash-channels").textContent = (config.channels || [])
-          .map((c) => c.id || c)
-          .join(", ");
-        document.getElementById("dash-webhook-status").textContent =
-          config.webhookStatus === "registered"
-            ? "Registered (new)"
-            : config.webhookStatus === "existing"
-              ? "Active"
-              : config.webhookStatus || "Active";
+          config.slack_installations?.slack_team_name ||
+          app.slackTeamName ||
+          config.slack_team_id ||
+          "—";
+        document.getElementById("dash-channels").textContent =
+          (config.channels || []).map((c) => c.name || c.id || c).join(", ") || "—";
 
+        document.getElementById("dash-shared-note").textContent = isOwner
+          ? "You set this up. It's shared with everyone who can edit this file."
+          : "Set up by another editor — shared with everyone who can edit this file.";
+
+        // Only the original setter can remove the Figma connection (webhook).
+        document.getElementById("btn-remove-figma").style.display = isOwner ? "flex" : "none";
+
+        const active = config.is_active !== false;
+        document.getElementById("btn-toggle-active").textContent = active ? "Disable" : "Enable";
+
+        applyStatus(config);
+        showView("dashboard");
+      }
+
+      // Map is_active + delivery_status to the header badge and reconnect banner.
+      function applyStatus(config) {
         const badge = document.getElementById("dash-status-badge");
-        if (config.is_active === false) {
+        const banner = document.getElementById("dash-reconnect-banner");
+        const desc = document.getElementById("dash-reconnect-desc");
+        const status = config.delivery_status || "ok";
+        banner.style.display = "none";
+
+        if (status !== "ok") {
+          badge.textContent = "Reconnect needed";
+          badge.className = "badge badge-warning";
+          banner.style.display = "block";
+          desc.textContent =
+            status === "slack_revoked"
+              ? "Slack was disconnected — reconnect Slack to resume notifications."
+              : status === "figma_revoked"
+                ? "Figma access was revoked — the original setter must reconnect Figma."
+                : "Recent notifications failed to send — check the destination.";
+        } else if (config.is_active === false) {
           badge.textContent = "Paused";
           badge.className = "badge badge-warning";
         } else {
           badge.textContent = "Active";
           badge.className = "badge badge-success";
         }
+      }
 
-        showView("dashboard");
+      // Map backend error codes to friendly, user-facing text.
+      function friendlyError(code) {
+        switch (code) {
+          case "figma_reauth_required":
+            return "Your Figma access needs reconnecting. Close and reopen the plugin to reconnect.";
+          case "figma_file_access_denied":
+            return "You don't have access to this file.";
+          case "figma_not_connected":
+            return "Connect Figma first.";
+          case "config_exists":
+            return "This file is already set up.";
+          default:
+            return code || "";
+        }
+      }
+
+      // Inline two-click confirm — window.confirm() is unreliable in Figma's
+      // plugin iframe. First click arms the button for a few seconds; a second
+      // click within the window runs `action`.
+      function armConfirm(btn, armedLabel, action) {
+        if (btn.dataset.armed === "1") {
+          clearTimeout(Number(btn.dataset.armTimer));
+          delete btn.dataset.armed;
+          btn.textContent = btn.dataset.restLabel || btn.textContent;
+          action();
+          return;
+        }
+        btn.dataset.restLabel = btn.textContent;
+        btn.dataset.armed = "1";
+        btn.textContent = armedLabel;
+        btn.dataset.armTimer = String(
+          setTimeout(() => {
+            delete btn.dataset.armed;
+            btn.textContent = btn.dataset.restLabel || btn.textContent;
+          }, 3500),
+        );
       }
 
       function editConfig() {
-        // Go back to setup with existing values pre-filled. Slack + Figma stay
-        // connected, so no re-auth is needed.
-        app.channels = [];
+        // Reopen setup pre-filled with the shared config's channels. app.configId
+        // stays set, so Save does a PUT (edit) rather than a create.
+        app.channels = (app.currentConfig?.channels || []).map((c) =>
+          typeof c === "string" ? { id: c } : { id: c.id, name: c.name },
+        );
         showView("setup");
         if (app.figmaConnected) markFigmaConnected();
         updateSetupState();
         renderChannels();
       }
 
-      async function deleteConfig() {
-        if (!app.configId) return;
+      // Disable / enable notifications (any edit-access user) — reversible; keeps
+      // the Figma webhook registered.
+      function toggleActive() {
+        const btn = document.getElementById("btn-toggle-active");
+        const active = app.currentConfig?.is_active !== false;
+        if (active) armConfirm(btn, "Turn off for everyone?", () => setActive(false));
+        else setActive(true);
+      }
 
+      async function setActive(next) {
+        const btn = document.getElementById("btn-toggle-active");
+        btn.disabled = true;
         try {
-          await api(`/api/config?id=${encodeURIComponent(app.configId)}`, { method: "DELETE" });
-          setStorage("config_id", null);
-          app.configId = null;
-          app.channels = [];
-          notify("Configuration removed.");
-
-          // Removing a notification config does NOT disconnect the user's accounts —
-          // keep Slack + Figma connected and just return to the configure step. This
-          // also avoids surprising the user with an automatic OAuth tab on removal.
-          showView("setup");
-          if (app.figmaConnected) markFigmaConnected();
-          else startFigmaAuto();
-          updateSetupState();
-          renderChannels();
+          const res = await api(`/api/config`, {
+            method: "PUT",
+            body: JSON.stringify({ fileKey: app.fileKey, isActive: next }),
+          });
+          if (!res.ok) {
+            const err = await readJson(res);
+            throw new Error(friendlyError(err.error) || "Update failed");
+          }
+          const config = await readJson(res);
+          notify(next ? "Notifications enabled." : "Notifications disabled for everyone.");
+          showSharedConfig(config, config.isOwner === true);
         } catch (e) {
-          notify("Failed to delete configuration", true);
+          notify(e.message, true);
+        } finally {
+          btn.disabled = false;
         }
+      }
+
+      // Remove the Figma connection (original setter only) — tears down the file
+      // webhook so the file stops firing entirely.
+      function removeFigmaConnection(btn) {
+        armConfirm(btn, "Click again to remove", async () => {
+          try {
+            const res = await api(`/api/config?fileKey=${encodeURIComponent(app.fileKey)}`, {
+              method: "DELETE",
+            });
+            if (!res.ok) {
+              const err = await readJson(res);
+              throw new Error(friendlyError(err.error) || "Remove failed");
+            }
+            setStorage("config_id", null);
+            app.configId = null;
+            app.currentConfig = null;
+            app.channels = [];
+            app.isOwner = false;
+            notify("Figma connection removed. Notifications are off for this file.");
+            showView("setup");
+            if (app.figmaConnected) markFigmaConnected();
+            else startFigmaAuto();
+            updateSetupState();
+            renderChannels();
+          } catch (e) {
+            notify(e.message, true);
+          }
+        });
       }
 
       // Handshake: tell the sandbox the UI is loaded and listening, so it re-sends
