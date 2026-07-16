@@ -24,14 +24,32 @@ rather stay anonymous.
 
 ## What the plugin can access
 
-- **Figma scope:** the plugin requests a single OAuth scope, `webhooks:write`. It is
-  used only to register and delete a `LIBRARY_PUBLISH` webhook on the file the user
-  selects. The plugin **never reads file contents, designs, or layers.**
+- **Figma scopes:** the plugin requests `webhooks:write` and `webhooks:read`.
+  `webhooks:write` registers and deletes a `LIBRARY_PUBLISH` webhook on the file the
+  user selects; `webhooks:read` lists a file's webhooks so the backend can confirm a
+  caller can access that file before returning or changing its shared config. The
+  plugin **never reads file contents, designs, or layers.**
 - **From the Figma plugin API** it reads only the current file's key and name and the
   current user's id and display name — used to label configurations and to bind a
   webhook to the file.
 - **Slack scopes:** `chat:write`, `chat:write.public`, `channels:read`, `groups:read`
-  — used only to post notifications to the channels the user chooses.
+  — used to post notifications to the channels the user chooses and to list a
+  workspace's channels for the picker.
+
+## Org-shared, per-file access control
+
+Configuration is keyed by **file**, not user: anyone with edit access to a file
+manages that file's single shared config. The backend enforces this as follows:
+
+- The **original setter** (`created_by`) is trusted for their own file — the same
+  trust the app used before this model (they proved edit access when they registered
+  the webhook).
+- **Any other user** is verified against the file with **their own** Figma token
+  (`GET /v2/webhooks?context=file`, requiring `webhooks:read`) before the backend
+  returns or mutates that file's config. No access → `403`.
+- **Creating** the webhook is edit-gated by Figma for free (`POST /v2/webhooks`
+  requires "Can edit"). Only the original setter can **remove** the Figma connection
+  (delete the webhook); any editor can edit channels or disable notifications.
 
 ## How authentication works
 
