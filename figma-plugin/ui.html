@@ -578,6 +578,11 @@
         >
           <div style="font-weight: 600; color: #cf222e; margin-bottom: 2px">Reconnect needed</div>
           <div style="font-size: 11px; color: #57606a" id="dash-reconnect-desc"></div>
+          <button
+            class="btn btn-secondary btn-sm"
+            id="dash-reconnect-btn"
+            style="display: none; margin-top: 8px"
+          ></button>
         </div>
 
         <div class="card">
@@ -943,7 +948,7 @@
         }
       }
 
-      async function connectSlack() {
+      async function connectSlack(onDone) {
         const btn = document.getElementById("btn-connect-slack");
         if (!app.currentUser || !app.currentUser.id) {
           notify(
@@ -987,7 +992,8 @@
                 setStorage("slack_auth", statusData.data);
                 document.getElementById("slack-status").innerHTML = "";
                 notify("Slack connected!");
-                updateSetupState();
+                if (typeof onDone === "function") onDone();
+                else updateSetupState();
               } else if (statusData.status === "failed") {
                 clearInterval(pollTimer);
                 btn.disabled = false;
@@ -1061,9 +1067,10 @@
         document.getElementById("btn-figma-retry").style.display = "inline-flex";
       }
 
-      async function startFigmaAuto() {
+      async function startFigmaAuto(onDone) {
         if (app.figmaConnected) {
           markFigmaConnected();
+          if (typeof onDone === "function") onDone();
           return;
         }
         if (!app.currentUser || !app.currentUser.id) {
@@ -1108,6 +1115,7 @@
                 setStorage("figma_auth", statusData.data);
                 markFigmaConnected();
                 notify("Figma connected!");
+                if (typeof onDone === "function") onDone();
               } else if (statusData.status === "failed") {
                 clearInterval(figmaPollTimer);
                 figmaPollTimer = null;
@@ -1382,8 +1390,11 @@
         const badge = document.getElementById("dash-status-badge");
         const banner = document.getElementById("dash-reconnect-banner");
         const desc = document.getElementById("dash-reconnect-desc");
+        const btn = document.getElementById("dash-reconnect-btn");
         const status = config.delivery_status || "ok";
         banner.style.display = "none";
+        btn.style.display = "none";
+        btn.onclick = null;
 
         if (status !== "ok") {
           badge.textContent = "Reconnect needed";
@@ -1395,6 +1406,18 @@
               : status === "figma_revoked"
                 ? "Figma access was revoked — the original setter must reconnect Figma."
                 : "Recent notifications failed to send — check the destination.";
+
+          // Provide the relevant reconnect action (§6c).
+          if (status === "slack_revoked") {
+            btn.textContent = "Reconnect Slack";
+            btn.onclick = reconnectSlack;
+            btn.style.display = "inline-flex";
+          } else if (status === "figma_revoked" && app.isOwner) {
+            btn.textContent = "Reconnect Figma";
+            btn.onclick = reconnectFigma;
+            btn.style.display = "inline-flex";
+          }
+          // send_failing → informational banner only.
         } else if (config.is_active === false) {
           badge.textContent = "Paused";
           badge.className = "badge badge-warning";
@@ -1402,6 +1425,33 @@
           badge.textContent = "Active";
           badge.className = "badge badge-success";
         }
+      }
+
+      // ── Reconnect actions (from the shared-view banner) ──
+      async function refreshConfig() {
+        if (!app.fileKey || !app.sessionToken) return;
+        try {
+          const res = await api(`/api/config?fileKey=${encodeURIComponent(app.fileKey)}`);
+          if (res.ok) {
+            const data = await readJson(res);
+            if (data.config) showSharedConfig(data.config, data.isOwner === true);
+          }
+        } catch (e) {
+          /* keep the current view on a network hiccup */
+        }
+      }
+
+      function reconnectSlack() {
+        notify("Reconnecting Slack — check your browser.");
+        // Re-run the Slack OAuth; refresh the shared view once it completes (the
+        // callback clears the slack_revoked flag).
+        connectSlack(refreshConfig);
+      }
+
+      function reconnectFigma() {
+        notify("Reconnecting Figma — check your browser.");
+        app.figmaConnected = false; // force startFigmaAuto to re-run the OAuth
+        startFigmaAuto(refreshConfig);
       }
 
       // Map backend error codes to friendly, user-facing text.

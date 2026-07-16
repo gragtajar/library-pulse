@@ -24,6 +24,7 @@ import { fetchWithTimeout, withErrorHandling } from "../lib/http.js";
 import { logger } from "../lib/logger.js";
 
 const SLACK_POST_CONCURRENCY = 4;
+const SLACK_AUTH_ERRORS = new Set(["token_revoked", "invalid_auth", "account_inactive"]);
 
 export default withErrorHandling(
   /**
@@ -102,7 +103,9 @@ export default withErrorHandling(
     // that file. (Deactivated configs are skipped, so a torn-down setup no-ops.)
     const { data: configs, error: cfgErr } = await supabase
       .from("configurations")
-      .select("id, figma_file_key, channels, slack_installations(bot_token_enc, slack_team_name)")
+      .select(
+        "id, figma_file_key, channels, delivery_status, slack_installations(bot_token_enc, slack_team_name)",
+      )
       .eq("figma_file_key", fileKey)
       .eq("is_active", true);
 
@@ -157,6 +160,8 @@ export default withErrorHandling(
         else pending.push(channelId);
       }
 
+      /** @type {string[]} */
+      const errorCodes = [];
       for (const chunk of chunked(pending, SLACK_POST_CONCURRENCY)) {
         const results = await Promise.allSettled(
           chunk.map((channelId) =>
@@ -165,9 +170,17 @@ export default withErrorHandling(
         );
         for (const r of results) {
           if (r.status === "fulfilled") sent++;
-          else failed++;
+          else {
+            failed++;
+            const m = r.reason instanceof Error ? r.reason.message : String(r.reason);
+            errorCodes.push(m.startsWith("slack_api_error:") ? m.slice(16) : "unknown");
+          }
         }
       }
+
+      // Surface Slack revocation / send failures via delivery_status so the plugin
+      // shows a "reconnect" banner; reset to 'ok' once delivery recovers.
+      await updateDeliveryStatus(config, errorCodes, failed);
 
       logger.info("webhook_config_dispatched", {
         config_id: config.id,
@@ -182,6 +195,39 @@ export default withErrorHandling(
     return res.status(200).json({ status: "processed", results: allResults });
   },
 );
+
+/**
+ * Update a config's delivery_status after a fan-out. Slack auth errors →
+ * 'slack_revoked'; other failures → 'send_failing'; all-good → 'ok'. Writes only
+ * on change, and never clears a 'figma_revoked' flag on a healthy Slack send.
+ *
+ * @param {{ id: string, delivery_status?: string }} config
+ * @param {string[]} errorCodes
+ * @param {number} failed
+ */
+async function updateDeliveryStatus(config, errorCodes, failed) {
+  let status = "ok";
+  /** @type {string|null} */
+  let lastErr = null;
+  const authErr = errorCodes.find((c) => SLACK_AUTH_ERRORS.has(c));
+  if (authErr) {
+    status = "slack_revoked";
+    lastErr = authErr;
+  } else if (failed > 0) {
+    status = "send_failing";
+    lastErr = errorCodes[0] ?? "send_failed";
+  }
+
+  const current = config.delivery_status ?? "ok";
+  if (current === status) return;
+  if (status === "ok" && current === "figma_revoked") return; // different axis
+
+  const { error } = await supabase
+    .from("configurations")
+    .update({ delivery_status: status, last_delivery_error: lastErr })
+    .eq("id", config.id);
+  if (error) logger.warn("delivery_status_update_failed", { config_id: config.id, err: error });
+}
 
 /**
  * Post one Slack message and persist the result to `notification_log`
