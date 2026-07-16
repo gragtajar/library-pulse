@@ -48,7 +48,7 @@ When someone on your team publishes changes to a Figma library (components, styl
 2. **Vercel Backend** — serverless functions for OAuth callbacks, configuration CRUD, and receiving Figma webhook events.
 3. **Supabase Database** — stores encrypted Slack bot tokens, Figma OAuth tokens, webhook registrations, and user configurations.
 
-Each user authorizes Figma with a single scope (`webhooks:write`), and the backend registers a **file-context** `LIBRARY_PUBLISH` webhook on the specific file they select, using their own access. There is no shared admin token and no team-admin requirement.
+Configuration is **org-shared per file**: anyone with edit access to a file manages that file's single shared config. Each user authorizes Figma with two scopes — `webhooks:write` (register the `LIBRARY_PUBLISH` webhook on the file) and `webhooks:read` (list a file's webhooks to confirm a user can access it before showing or editing that file's shared config). The backend registers a **file-context** webhook using the setter's own access — no shared admin token, no team-admin requirement.
 
 ---
 
@@ -93,7 +93,7 @@ Before setting up Library Pulse, you'll need accounts/apps on these services:
 
 1. Go to [figma.com/developers/apps](https://www.figma.com/developers/apps) → **Create a new app**.
 2. Add an OAuth **redirect URL**: `https://YOUR-VERCEL-DOMAIN/api/auth/figma-callback`.
-3. On the **OAuth scopes** page, select **only** `webhooks:write`. (That is the only Figma API the backend calls — it never reads file contents.)
+3. On the **OAuth scopes** page, select `webhooks:write` **and** `webhooks:read`. (`webhooks:write` registers/deletes the `LIBRARY_PUBLISH` webhook; `webhooks:read` lists a file's webhooks to confirm a user can access it before showing or editing that file's shared config. The app never reads file contents.)
 4. Note the **Client ID** and **Client Secret** — you'll set them as `FIGMA_CLIENT_ID` / `FIGMA_CLIENT_SECRET`.
 
 Each installer authorizes this app once; the backend then registers a `LIBRARY_PUBLISH` webhook on **their** selected file using **their** authorization. No team-admin rights and no shared token are required — only edit access to the file (which the user already has).
@@ -155,17 +155,20 @@ Each installer authorizes this app once; the backend then registers a `LIBRARY_P
 
 ### First-time setup (in the plugin)
 
-1. **Open the plugin** — it connects your Figma account automatically. A browser tab opens once so you can authorize the app (scope: `webhooks:write`); no need to sign in again.
+The plugin walks you through four numbered steps:
+
+1. **Connect Figma** — automatic on open. A browser tab opens once so you can authorize the app (scopes: `webhooks:write`, `webhooks:read`); no need to sign in again.
 2. **Connect Slack** — OAuth flow opens in your browser. Authorize Library Pulse to post messages.
-3. **Select a file** — the current file is auto-detected, or you can paste a file key/URL.
-4. **Add Slack channels** — enter 1–3 channel IDs where notifications should be posted.
-5. **Save & Activate** — the backend registers a `LIBRARY_PUBLISH` webhook on that file using your Figma authorization.
+3. **Select file** — the file you have open, shown read-only (there's no way to target a different file).
+4. **Add channels** — pick 1–3 channels from a **searchable dropdown** (sorted by member count; `#` public, 🔒 private). Then **Save & Activate** — the backend registers a `LIBRARY_PUBLISH` webhook on that file using your Figma authorization.
+
+If the file already has a config, anyone with edit access sees the same **shared config** and can edit its channels — they don't start from a blank setup.
 
 ### When a library is published
 
 1. Figma fires a `LIBRARY_PUBLISH` webhook event for that file.
-2. The backend verifies the passcode (bound to the specific webhook, its owner, and its file), then looks up that owner's active configurations for the file.
-3. For each configuration, it decrypts the stored Slack bot token and posts a rich Block Kit message to the configured channels (de-duplicated per channel so retries never double-post).
+2. The backend verifies the passcode (bound to the specific webhook and its file), then looks up the file's single active configuration.
+3. It decrypts the stored Slack bot token and posts a rich Block Kit message to the configured channels (de-duplicated per channel so retries never double-post). If Slack rejects the token, the config is flagged so the plugin can show a "reconnect" banner.
 4. Each notification is logged to the `notification_log` table.
 
 ---
@@ -200,9 +203,10 @@ Open in Figma · Library Pulse
 
 ## Security
 
-- **Least privilege:** the plugin requests a single Figma scope, `webhooks:write`, and never reads file contents.
+- **Least privilege:** the plugin requests only `webhooks:write` + `webhooks:read` on Figma — enough to manage the file's webhook and confirm a caller can access the file — and never reads file contents.
 - **Encrypted at rest:** Slack bot tokens and Figma OAuth tokens are encrypted with AES-256-GCM. The encryption key lives only in a Vercel environment variable.
-- **Real API auth:** config API calls are authenticated with a signed (HMAC-SHA256) session token minted after Figma OAuth and bound to the Figma user id, so a user can only read or change their own configuration.
+- **Real API auth:** config API calls are authenticated with a signed (HMAC-SHA256) session token minted after Figma OAuth and bound to the Figma user id.
+- **Org-shared access control:** config is keyed by file. The original setter is trusted for their own file; any other user is verified against the file with their own Figma token (`webhooks:read`) before the backend returns or changes that file's shared config.
 - **Webhook authenticity & isolation:** each file webhook has its own high-entropy passcode, verified with a constant-time compare; a valid webhook can only post to the configuration owned by the user who registered it, for the exact file it was registered on.
 - **CSRF / replay protection:** OAuth `state` is single-use and expires after 10 minutes; webhook retries are de-duplicated.
 - **Row-Level Security** is enabled on all Supabase tables; the backend uses the service-role key.

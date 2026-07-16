@@ -1,6 +1,6 @@
 # Architecture
 
-> Last updated: 2026-04-20
+> Last updated: 2026-07-17
 
 This document covers the high-level design of Library Pulse — the three runtime components, the data flow on each end-user action, and the security boundaries you cross moving between them.
 
@@ -23,6 +23,7 @@ flowchart LR
         AuthFigma["/api/auth/figma(-callback)"]
         Status["/api/auth-status"]
         Config["/api/config"]
+        SlackChannels["/api/slack/channels"]
         Webhook["/api/webhook"]
         Health["/api/health"]
     end
@@ -35,7 +36,7 @@ flowchart LR
     SlackAPI["Slack API"]
     FigmaAPI["Figma API"]
 
-    UI -- fetch + X-Figma-User --> AuthSlack & AuthFigma & Status & Config
+    UI -- fetch + Bearer session --> AuthSlack & AuthFigma & Status & Config & SlackChannels
     Plugin -- openExternal --> Browser
     Browser -- redirect --> AuthSlack
     Browser -- redirect --> AuthFigma
@@ -86,7 +87,7 @@ Figma OAuth is structurally identical (different scopes, different upstream URL,
 ```
 User publishes a library in Figma
    1. Figma fires LIBRARY_PUBLISH webhook → POST /api/webhook
-      Headers: X-Figma-Passcode: <random per-team passcode>
+      Headers: X-Figma-Passcode: <random per-webhook passcode>
    2. Backend looks up figma_webhooks by webhook_id
    3. Backend timing-safe-compares passcode header to stored value
    4. Backend derives an event_key from the payload
@@ -102,19 +103,19 @@ User publishes a library in Figma
    8. Return { status: "processed", results: [...] }
 ```
 
-Per-team webhook is registered once when the first user in the team creates a config (`config.js` → `ensureWebhook`). Subsequent configs for the same team reuse it.
+Configuration is **org-shared per file**: there is one config and one webhook per file, registered by the original setter with their own Figma token (`config.js` → `ensureWebhook`). Step 6 finds the file's single active config. Slack revocation detected in step 7 flips the config's `delivery_status` so the plugin shows a "reconnect" banner.
 
 ---
 
 ## 4. Security boundaries
 
-| Boundary                         | Trust on the inside                           | What we do at the edge                                                                                       |
-| -------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Browser → `/api/auth/*-callback` | Untrusted query string                        | UUID-validate `state`, ignore unknown `error` codes, render escaped HTML only, hard CSP `default-src 'none'` |
-| Plugin UI → backend              | UI controls the body but Figma rate-limits it | Require `X-Figma-User` header, compare it to `figma_user_id` field in body, reject mismatches with 403       |
-| Figma webhook → `/api/webhook`   | Anyone can POST                               | Hard-require `webhook_id` + passcode header, `timingSafeEqual` compare, dedupe via `webhook_events` UNIQUE   |
-| Backend → Slack                  | Bot token is in env once decrypted            | `fetchWithTimeout(8s)`, bounded concurrency, never log token                                                 |
-| Backend → Supabase               | Service-role key bypasses RLS                 | RLS still enabled in case the key leaks; structured logs scrub tokens                                        |
+| Boundary                         | Trust on the inside                | What we do at the edge                                                                                                                                                                          |
+| -------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Browser → `/api/auth/*-callback` | Untrusted query string             | UUID-validate `state`, ignore unknown `error` codes, render escaped HTML only, hard CSP `default-src 'none'`                                                                                    |
+| Plugin UI → backend              | UI controls the body               | Require an HMAC-signed `Authorization: Bearer` session token (bound to the Figma user id); for a file's shared config, trust the setter and verify other users' file access via `webhooks:read` |
+| Figma webhook → `/api/webhook`   | Anyone can POST                    | Hard-require `webhook_id` + passcode header, `timingSafeEqual` compare, dedupe via `webhook_events` UNIQUE                                                                                      |
+| Backend → Slack                  | Bot token is in env once decrypted | `fetchWithTimeout(8s)`, bounded concurrency, never log token                                                                                                                                    |
+| Backend → Supabase               | Service-role key bypasses RLS      | RLS still enabled in case the key leaks; structured logs scrub tokens                                                                                                                           |
 
 The encryption key (`ENCRYPTION_KEY`) is the single root of secret in the system. If it leaks, every stored OAuth token must be revoked at the providers. See [`docs/runbooks/rotate-encryption-key.md`](./docs/runbooks/rotate-encryption-key.md).
 

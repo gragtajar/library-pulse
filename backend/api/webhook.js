@@ -22,9 +22,9 @@ import { buildSlackBlocks, fallbackText } from "../lib/slack-blocks.js";
 import { deriveEventKey, hasSentDelivery } from "../lib/idempotency.js";
 import { fetchWithTimeout, withErrorHandling } from "../lib/http.js";
 import { logger } from "../lib/logger.js";
+import { deliveryStatusFor } from "../lib/delivery-status.js";
 
 const SLACK_POST_CONCURRENCY = 4;
-const SLACK_AUTH_ERRORS = new Set(["token_revoked", "invalid_auth", "account_inactive"]);
 
 export default withErrorHandling(
   /**
@@ -206,25 +206,14 @@ export default withErrorHandling(
  * @param {number} failed
  */
 async function updateDeliveryStatus(config, errorCodes, failed) {
-  let status = "ok";
-  /** @type {string|null} */
-  let lastErr = null;
-  const authErr = errorCodes.find((c) => SLACK_AUTH_ERRORS.has(c));
-  if (authErr) {
-    status = "slack_revoked";
-    lastErr = authErr;
-  } else if (failed > 0) {
-    status = "send_failing";
-    lastErr = errorCodes[0] ?? "send_failed";
-  }
-
+  const { status, lastError } = deliveryStatusFor(errorCodes, failed);
   const current = config.delivery_status ?? "ok";
   if (current === status) return;
   if (status === "ok" && current === "figma_revoked") return; // different axis
 
   const { error } = await supabase
     .from("configurations")
-    .update({ delivery_status: status, last_delivery_error: lastErr })
+    .update({ delivery_status: status, last_delivery_error: lastError })
     .eq("id", config.id);
   if (error) logger.warn("delivery_status_update_failed", { config_id: config.id, err: error });
 }

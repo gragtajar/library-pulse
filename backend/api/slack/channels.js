@@ -27,6 +27,7 @@ import { requireSession } from "../../lib/session.js";
 import { NotFoundError, UpstreamError, ValidationError } from "../../lib/errors.js";
 import { assertFigmaFileKey } from "../../lib/validators.js";
 import { assertFileAccess } from "../../lib/figma-access.js";
+import { normalizeChannels } from "../../lib/slack-channels.js";
 
 const PAGE_LIMIT = 200;
 const MAX_PAGES = 5; // up to 1000 channels
@@ -49,7 +50,6 @@ export default withErrorHandling(
     const botToken = await getBotToken(teamId);
 
     const channels = await listAllChannels(botToken);
-    channels.sort((a, b) => b.num_members - a.num_members);
     return res.status(200).json({ channels });
   },
 );
@@ -99,8 +99,8 @@ async function getBotToken(slackTeamId) {
  * @returns {Promise<Array<{id: string, name: string, is_private: boolean, num_members: number}>>}
  */
 async function listAllChannels(botToken) {
-  /** @type {Array<{id: string, name: string, is_private: boolean, num_members: number}>} */
-  const out = [];
+  /** @type {any[]} */
+  const raw = [];
   let cursor = "";
 
   for (let page = 0; page < MAX_PAGES; page++) {
@@ -125,21 +125,12 @@ async function listAllChannels(botToken) {
       throw new UpstreamError(`slack_error:${String(data.error).slice(0, 60)}`);
     }
 
-    for (const c of data.channels ?? []) {
-      if (typeof c?.id === "string" && typeof c?.name === "string") {
-        out.push({
-          id: c.id,
-          name: c.name,
-          is_private: !!c.is_private,
-          num_members: typeof c.num_members === "number" ? c.num_members : 0,
-        });
-      }
-    }
+    if (Array.isArray(data.channels)) raw.push(...data.channels);
 
     cursor = data.response_metadata?.next_cursor || "";
     if (!cursor) break;
   }
-  return out;
+  return normalizeChannels(raw);
 }
 
 /** @param {string | string[] | undefined} v */
