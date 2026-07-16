@@ -321,14 +321,30 @@ async function registerWebhookReporting(callerId, fileKey) {
   try {
     return await ensureWebhook(callerId, fileKey);
   } catch (err) {
-    logger.warn("webhook_register_failed", {
-      file_key: fileKey,
-      reason: err instanceof Error ? err.message : String(err),
-    });
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.warn("webhook_register_failed", { file_key: fileKey, reason });
+    // A revoked/expired setter token → surface figma_revoked so the shared view
+    // shows a "reconnect Figma" banner (§6b).
+    if (reason === "figma_reauth_required") await markDelivery(fileKey, "figma_revoked", reason);
     return err instanceof ValidationError || err instanceof ForbiddenError
       ? err.message
       : "registration_failed";
   }
+}
+
+/**
+ * Best-effort: set a file config's delivery_status (revocation surfacing, §6).
+ *
+ * @param {string} fileKey
+ * @param {string} status
+ * @param {string} [error]
+ */
+async function markDelivery(fileKey, status, error) {
+  const { error: dbErr } = await supabase
+    .from("configurations")
+    .update({ delivery_status: status, last_delivery_error: error ?? null })
+    .eq("figma_file_key", fileKey);
+  if (dbErr) logger.warn("delivery_status_update_failed", { file_key: fileKey, err: dbErr });
 }
 
 /**

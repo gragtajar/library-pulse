@@ -105,6 +105,14 @@ export default withErrorHandling(
       return renderResultPage(res, { success: false, message: "Failed to save credentials." });
     }
 
+    // Reconnecting Slack clears any prior slack_revoked / send_failing flag on
+    // this workspace's configs (§6c). Best-effort — never blocks the callback.
+    await supabase
+      .from("configurations")
+      .update({ delivery_status: "ok", last_delivery_error: null })
+      .eq("slack_team_id", teamId)
+      .in("delivery_status", ["slack_revoked", "send_failing"]);
+
     await finalizeAuthSession(state, "completed", {
       slack_team_id: teamId,
       slack_team_name: teamName,

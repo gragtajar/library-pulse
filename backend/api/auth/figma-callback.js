@@ -109,6 +109,14 @@ export default withErrorHandling(
       });
     }
 
+    // Reconnecting Figma clears a prior figma_revoked flag on this setter's
+    // configs (§6c). Best-effort — never blocks the callback.
+    await supabase
+      .from("configurations")
+      .update({ delivery_status: "ok", last_delivery_error: null })
+      .eq("created_by", figmaUserId)
+      .eq("delivery_status", "figma_revoked");
+
     // Mint a signed session token bound to this verified Figma user. The
     // plugin polls auth-status, receives it in result_data, and sends it as a
     // bearer token on every config call — replacing the spoofable header.
