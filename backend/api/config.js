@@ -1,31 +1,40 @@
 // @ts-check
 /**
- * /api/config — CRUD for notification configurations.
+ * /api/config — CRUD for the org-shared, per-file notification config.
  *
- *   GET    → list the caller's configs
- *   POST   { fileKey, fileName?, slackTeamId, channels } → create + register webhook
- *   PUT    { id, …updates } → update config
- *   DELETE ?id=…            → delete config (and tear down its Figma webhook)
+ *   GET    ?fileKey=…  → the file's single shared config (+ isOwner), gated by a
+ *                        file-access check. No fileKey → legacy: the caller's own
+ *                        configs (kept so the currently-live plugin keeps working).
+ *   POST   { fileKey, fileName?, slackTeamId, channels }
+ *                      → create the file's config (or, for the original setter,
+ *                        update in place); 409 if another user already owns it.
+ *   PUT    { id|fileKey, …updates } → any edit-access user updates channels, etc.
+ *   DELETE ?id=…|?fileKey=… → deactivate the config (any edit-access user); the
+ *                        original setter also tears down the Figma webhook.
  *
- * Authorization: every request must carry `Authorization: Bearer <token>`,
- * a signed session token minted after Figma OAuth (see lib/session.js). The
- * caller's Figma user id is derived from that token — never from the request
- * body or a self-asserted header — so one user cannot act on another's configs.
+ * Authorization: every request carries `Authorization: Bearer <token>` — a
+ * signed session token minted after Figma OAuth (lib/session.js). The caller's
+ * Figma user id comes from that token, never the body.
  *
- * Webhook model: file-context. When a config is saved we register a Figma
- * `LIBRARY_PUBLISH` webhook on the *selected file* using the *caller's own*
- * Figma OAuth token. This only needs "Can edit" on the file, so it works for
- * any installer — no shared admin token, no team-admin requirement, no Team ID.
+ * Access model (SPEC-batch-2 §0/§4): config is keyed by FILE. Anyone with edit
+ * access to a file manages its config. Access is verified with the caller's own
+ * Figma token (lib/figma-access.js). Creating/deleting the webhook is edit-gated
+ * by Figma for free; GET/PUT/DELETE use the file-access probe.
  */
 
 import crypto from "node:crypto";
 import supabase from "../lib/supabase.js";
-import { decrypt } from "../lib/encryption.js";
 import { applyCors, fetchWithTimeout, withErrorHandling } from "../lib/http.js";
 import { logger } from "../lib/logger.js";
 import { requireSession } from "../lib/session.js";
 import { ForbiddenError, NotFoundError, UpstreamError, ValidationError } from "../lib/errors.js";
 import { assertChannelList, assertFigmaFileKey, assertUuid } from "../lib/validators.js";
+import { assertFileAccess, getFigmaAccessToken } from "../lib/figma-access.js";
+
+const PG_UNIQUE_VIOLATION = "23505";
+// Only ever expose non-secret columns to the client. `bot_token_enc` is never
+// selected here; this list documents intent and guards future column additions.
+const CONFIG_SELECT = "*, slack_installations(slack_team_name)";
 
 export default withErrorHandling(
   /**
@@ -52,14 +61,45 @@ export default withErrorHandling(
 
 /**
  * @param {import("../lib/types.js").VercelRequest} req
+ * @param {string} name
+ * @returns {string}
+ */
+function queryParam(req, name) {
+  const raw = req.query?.[name];
+  return typeof raw === "string" ? raw : Array.isArray(raw) ? (raw[0] ?? "") : "";
+}
+
+/**
+ * @param {import("../lib/types.js").VercelRequest} req
  * @param {import("../lib/types.js").VercelResponse} res
  */
 async function handleGet(req, res) {
   const callerId = requireSession(req);
+  const fileKey = queryParam(req, "fileKey");
 
+  // ── New per-file path: the file's shared config, access-checked ──
+  if (fileKey) {
+    assertFigmaFileKey(fileKey);
+    await assertFileAccess(callerId, fileKey);
+
+    const { data, error } = await supabase
+      .from("configurations")
+      .select(CONFIG_SELECT)
+      .eq("figma_file_key", fileKey)
+      .maybeSingle();
+
+    if (error) {
+      logger.error("config_fetch_failed", { err: error });
+      throw new UpstreamError("config_fetch_failed");
+    }
+    if (!data) return res.status(200).json({ config: null });
+    return res.status(200).json({ config: data, isOwner: data.created_by === callerId });
+  }
+
+  // ── Legacy path (currently-live plugin): the caller's own configs ──
   const { data, error } = await supabase
     .from("configurations")
-    .select("*, slack_installations(slack_team_name)")
+    .select(CONFIG_SELECT)
     .eq("figma_user_id", callerId)
     .order("created_at", { ascending: false });
 
@@ -67,7 +107,6 @@ async function handleGet(req, res) {
     logger.error("config_fetch_failed", { err: error });
     throw new UpstreamError("config_fetch_failed");
   }
-
   return res.status(200).json({ configurations: data ?? [] });
 }
 
@@ -82,50 +121,76 @@ async function handlePost(req, res) {
   const fileKey = assertFigmaFileKey(body.fileKey);
   const slackTeamId = typeof body.slackTeamId === "string" ? body.slackTeamId : "";
   if (!slackTeamId) throw new ValidationError("Missing slackTeamId");
-
   const fileName = typeof body.fileName === "string" ? body.fileName.slice(0, 200) : null;
   const channels = assertChannelList(body.channels);
 
-  const { data: config, error: cfgErr } = await supabase
+  // One config per file. If it already exists and the caller isn't the setter,
+  // they should be shown the shared view rather than clobbering it → 409.
+  const { data: existing } = await supabase
     .from("configurations")
-    .upsert(
-      {
-        figma_user_id: callerId,
-        figma_file_key: fileKey,
+    .select(CONFIG_SELECT)
+    .eq("figma_file_key", fileKey)
+    .maybeSingle();
+
+  if (existing) {
+    const isOwner = existing.created_by === callerId;
+    if (!isOwner) {
+      return res.status(409).json({ error: "config_exists", config: existing, isOwner: false });
+    }
+    // Owner re-saving (covers the live plugin's edit-via-POST). Update in place.
+    const { data: updated, error: upErr } = await supabase
+      .from("configurations")
+      .update({
         figma_file_name: fileName,
         slack_team_id: slackTeamId,
         channels,
         is_active: true,
-      },
-      { onConflict: "figma_user_id,figma_file_key" },
-    )
-    .select()
+      })
+      .eq("id", existing.id)
+      .select(CONFIG_SELECT)
+      .single();
+    if (upErr || !updated) {
+      logger.error("config_save_failed", { err: upErr });
+      throw new UpstreamError("config_save_failed");
+    }
+    const webhookStatus = await registerWebhookReporting(callerId, fileKey);
+    return res.status(200).json({ ...updated, webhookStatus, isOwner: true });
+  }
+
+  // ── Create ── Webhook registration (below) is the edit-access gate: Figma
+  // requires "Can edit" + webhooks:write to POST /v2/webhooks, so no read probe.
+  const { data: config, error: cfgErr } = await supabase
+    .from("configurations")
+    .insert({
+      figma_user_id: callerId,
+      created_by: callerId,
+      figma_file_key: fileKey,
+      figma_file_name: fileName,
+      slack_team_id: slackTeamId,
+      channels,
+      is_active: true,
+    })
+    .select(CONFIG_SELECT)
     .single();
 
   if (cfgErr || !config) {
+    // Lost a create race → treat as "exists" and return the winning row.
+    if (cfgErr && cfgErr.code === PG_UNIQUE_VIOLATION) {
+      const { data: raced } = await supabase
+        .from("configurations")
+        .select(CONFIG_SELECT)
+        .eq("figma_file_key", fileKey)
+        .maybeSingle();
+      return res
+        .status(409)
+        .json({ error: "config_exists", config: raced, isOwner: raced?.created_by === callerId });
+    }
     logger.error("config_save_failed", { err: cfgErr });
     throw new UpstreamError("config_save_failed");
   }
 
-  // Register the file-context webhook. If this fails (e.g. Figma token expired,
-  // or the user lacks edit access), surface it — the config exists but won't
-  // deliver until the webhook is registered. We report status, not a 500, so
-  // the plugin can show an actionable message.
-  let webhookStatus;
-  try {
-    webhookStatus = await ensureWebhook(callerId, fileKey);
-  } catch (err) {
-    logger.warn("webhook_register_failed", {
-      file_key: fileKey,
-      reason: err instanceof Error ? err.message : String(err),
-    });
-    webhookStatus =
-      err instanceof ValidationError || err instanceof ForbiddenError
-        ? err.message
-        : "registration_failed";
-  }
-
-  return res.status(201).json({ ...config, webhookStatus });
+  const webhookStatus = await registerWebhookReporting(callerId, fileKey);
+  return res.status(201).json({ ...config, webhookStatus, isOwner: true });
 }
 
 /**
@@ -136,21 +201,18 @@ async function handlePut(req, res) {
   const callerId = requireSession(req);
   const body = /** @type {Record<string, unknown> | null} */ (req.body) ?? {};
 
-  const id = typeof body.id === "string" ? body.id : "";
-  assertUuid(id);
+  const row = await locateConfig(body.id, body.fileKey);
+  if (!row) throw new NotFoundError("config_not_found");
 
-  const { data: row, error: fetchErr } = await supabase
-    .from("configurations")
-    .select("figma_user_id")
-    .eq("id", id)
-    .single();
-  if (fetchErr || !row) throw new NotFoundError("config_not_found");
-  if (row.figma_user_id !== callerId) throw new ForbiddenError("not_owner");
+  // Any edit-access user may change channels/state on a file's shared config.
+  await assertFileAccess(callerId, row.figma_file_key);
 
   /** @type {Record<string, unknown>} */
   const updates = {};
   if (body.channels !== undefined) updates.channels = assertChannelList(body.channels);
   if (typeof body.fileName === "string") updates.figma_file_name = body.fileName.slice(0, 200);
+  if (typeof body.slackTeamId === "string" && body.slackTeamId)
+    updates.slack_team_id = body.slackTeamId;
   if (typeof body.isActive === "boolean") updates.is_active = body.isActive;
 
   if (Object.keys(updates).length === 0) {
@@ -160,16 +222,15 @@ async function handlePut(req, res) {
   const { data, error } = await supabase
     .from("configurations")
     .update(updates)
-    .eq("id", id)
-    .select()
+    .eq("id", row.id)
+    .select(CONFIG_SELECT)
     .single();
 
   if (error) {
     logger.error("config_update_failed", { err: error });
     throw new UpstreamError("config_update_failed");
   }
-
-  return res.status(200).json(data);
+  return res.status(200).json({ ...data, isOwner: row.created_by === callerId });
 }
 
 /**
@@ -178,66 +239,96 @@ async function handlePut(req, res) {
  */
 async function handleDelete(req, res) {
   const callerId = requireSession(req);
-  const idRaw = req.query.id;
-  const id = typeof idRaw === "string" ? idRaw : Array.isArray(idRaw) ? idRaw[0] : "";
-  assertUuid(id);
+  const row = await locateConfig(queryParam(req, "id"), queryParam(req, "fileKey"));
+  if (!row) throw new NotFoundError("config_not_found");
 
-  const { data: row, error: fetchErr } = await supabase
+  await assertFileAccess(callerId, row.figma_file_key);
+
+  // Any edit-access user can turn notifications off. Deactivate rather than
+  // hard-delete so the config (and other editors' channels) survive; a webhook
+  // firing into an inactive config is already a safe no-op in webhook.js.
+  const { error } = await supabase
     .from("configurations")
-    .select("figma_user_id, figma_file_key")
-    .eq("id", id)
-    .single();
-  if (fetchErr || !row) throw new NotFoundError("config_not_found");
-  if (row.figma_user_id !== callerId) throw new ForbiddenError("not_owner");
-
-  const { error } = await supabase.from("configurations").delete().eq("id", id);
+    .update({ is_active: false })
+    .eq("id", row.id);
   if (error) {
-    logger.error("config_delete_failed", { err: error });
+    logger.error("config_deactivate_failed", { err: error });
     throw new UpstreamError("config_delete_failed");
   }
 
-  // Best-effort: tear down the file webhook so it stops firing once nobody
-  // is listening. Failure here is non-fatal (the config is already gone).
-  try {
-    await teardownWebhook(callerId, row.figma_file_key);
-  } catch (err) {
-    logger.warn("webhook_teardown_failed", {
-      reason: err instanceof Error ? err.message : String(err),
-    });
+  // Only the original setter tears down the Figma webhook.
+  let webhookRemoved = false;
+  if (row.created_by === callerId) {
+    try {
+      await teardownWebhook(callerId, row.figma_file_key);
+      webhookRemoved = true;
+    } catch (err) {
+      logger.warn("webhook_teardown_failed", {
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
-
-  return res.status(200).json({ success: true });
+  return res.status(200).json({ success: true, deactivated: true, webhookRemoved });
 }
 
-// ── Figma webhook helpers ──────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Decrypt the caller's stored Figma OAuth access token, rejecting if they
- * haven't connected Figma or the token has expired (they must reconnect).
+ * Find a config by uuid `id` or by `fileKey`. Returns the minimal row needed
+ * for authorization decisions, or null.
  *
- * @param {string} figmaUserId
+ * @param {unknown} idRaw
+ * @param {unknown} fileKeyRaw
+ * @returns {Promise<{ id: string, figma_file_key: string, created_by: string|null } | null>}
+ */
+async function locateConfig(idRaw, fileKeyRaw) {
+  if (typeof idRaw === "string" && idRaw) {
+    assertUuid(idRaw);
+    const { data } = await supabase
+      .from("configurations")
+      .select("id, figma_file_key, created_by")
+      .eq("id", idRaw)
+      .maybeSingle();
+    return data ?? null;
+  }
+  if (typeof fileKeyRaw === "string" && fileKeyRaw) {
+    assertFigmaFileKey(fileKeyRaw);
+    const { data } = await supabase
+      .from("configurations")
+      .select("id, figma_file_key, created_by")
+      .eq("figma_file_key", fileKeyRaw)
+      .maybeSingle();
+    return data ?? null;
+  }
+  return null;
+}
+
+/**
+ * Register the file webhook, converting failures into a status string the
+ * plugin can act on (rather than a 500 that hides an already-saved config).
+ *
+ * @param {string} callerId
+ * @param {string} fileKey
  * @returns {Promise<string>}
  */
-async function getFigmaAccessToken(figmaUserId) {
-  const { data: tok } = await supabase
-    .from("figma_tokens")
-    .select("access_token_enc, expires_at")
-    .eq("figma_user_id", figmaUserId)
-    .maybeSingle();
-
-  if (!tok || !tok.access_token_enc) {
-    throw new ValidationError("figma_not_connected");
+async function registerWebhookReporting(callerId, fileKey) {
+  try {
+    return await ensureWebhook(callerId, fileKey);
+  } catch (err) {
+    logger.warn("webhook_register_failed", {
+      file_key: fileKey,
+      reason: err instanceof Error ? err.message : String(err),
+    });
+    return err instanceof ValidationError || err instanceof ForbiddenError
+      ? err.message
+      : "registration_failed";
   }
-  if (tok.expires_at && new Date(tok.expires_at).getTime() < Date.now()) {
-    throw new ValidationError("figma_reauth_required");
-  }
-  return decrypt(tok.access_token_enc);
 }
 
 /**
- * Register a `LIBRARY_PUBLISH` webhook on the given file (file context) using
- * the caller's own Figma token, if one isn't already active for this
- * (user, file). Returns "existing" or "registered".
+ * Register a `LIBRARY_PUBLISH` webhook on the file (one per file) using the
+ * caller's own Figma token, if one isn't already active. Returns "existing" or
+ * "registered".
  *
  * @param {string} figmaUserId
  * @param {string} fileKey
@@ -247,20 +338,19 @@ async function ensureWebhook(figmaUserId, fileKey) {
   const { data: existing } = await supabase
     .from("figma_webhooks")
     .select("id")
-    .eq("figma_user_id", figmaUserId)
     .eq("context_id", fileKey)
     .eq("status", "active")
     .maybeSingle();
   if (existing) return "existing";
 
-  const figmaToken = await getFigmaAccessToken(figmaUserId);
+  const { token } = await getFigmaAccessToken(figmaUserId);
   const passcode = crypto.randomBytes(24).toString("hex");
   const endpoint = `${process.env.PUBLIC_URL}/api/webhook`;
 
   const regRes = await fetchWithTimeout("https://api.figma.com/v2/webhooks", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${figmaToken}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -280,9 +370,9 @@ async function ensureWebhook(figmaUserId, fileKey) {
       status: regRes.status,
       body: errText.slice(0, 200),
     });
-    // 403 here almost always means the user lacks edit access to the file or
-    // the OAuth token is missing the webhooks:write scope.
+    // 403 → the user lacks edit access (or webhooks:write); 401 → reconnect.
     if (regRes.status === 403) throw new ForbiddenError("figma_file_permission_denied");
+    if (regRes.status === 401) throw new ValidationError("figma_reauth_required");
     throw new UpstreamError(`Figma API ${regRes.status}`);
   }
 
@@ -298,7 +388,7 @@ async function ensureWebhook(figmaUserId, fileKey) {
       registered_by: figmaUserId,
       status: "active",
     },
-    { onConflict: "figma_user_id,context_id" },
+    { onConflict: "context_id" },
   );
 
   logger.info("figma_webhook_registered", { file_key: fileKey, webhook_id: regData.id });
@@ -306,8 +396,8 @@ async function ensureWebhook(figmaUserId, fileKey) {
 }
 
 /**
- * Delete the file webhook for a (user, file) from Figma and our table.
- * No-op if none is registered.
+ * Delete the file webhook (one per file) from Figma and our table. No-op if
+ * none is registered.
  *
  * @param {string} figmaUserId
  * @param {string} fileKey
@@ -316,21 +406,18 @@ async function teardownWebhook(figmaUserId, fileKey) {
   const { data: row } = await supabase
     .from("figma_webhooks")
     .select("id, webhook_id")
-    .eq("figma_user_id", figmaUserId)
     .eq("context_id", fileKey)
     .maybeSingle();
   if (!row) return;
 
   try {
-    const figmaToken = await getFigmaAccessToken(figmaUserId);
+    const { token } = await getFigmaAccessToken(figmaUserId);
     await fetchWithTimeout(`https://api.figma.com/v2/webhooks/${row.webhook_id}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${figmaToken}` },
+      headers: { Authorization: `Bearer ${token}` },
       timeoutMs: 10_000,
     });
   } catch (err) {
-    // If the token's gone we can't delete it upstream; drop our row anyway so
-    // we don't treat a dead webhook as active.
     logger.warn("figma_webhook_delete_upstream_failed", {
       reason: err instanceof Error ? err.message : String(err),
     });

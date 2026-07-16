@@ -15,6 +15,7 @@ import { mintSession } from "../../lib/session.js";
 import { assertUuid } from "../../lib/validators.js";
 import { fetchWithTimeout, withErrorHandling } from "../../lib/http.js";
 import { UpstreamError, ValidationError } from "../../lib/errors.js";
+import { FIGMA_OAUTH_SCOPES } from "../../lib/figma-oauth.js";
 
 export default withErrorHandling(
   /**
@@ -89,6 +90,12 @@ export default withErrorHandling(
         access_token_enc: encrypt(accessToken),
         refresh_token_enc: typeof refreshToken === "string" ? encrypt(refreshToken) : null,
         expires_at: expiresAt,
+        // Record what was granted so the file-access probe knows whether this
+        // token carries webhooks:read (falls back to what we requested).
+        scopes:
+          typeof tokenData.scope === "string" && tokenData.scope
+            ? tokenData.scope
+            : FIGMA_OAUTH_SCOPES,
       },
       { onConflict: "figma_user_id" },
     );

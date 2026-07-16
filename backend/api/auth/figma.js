@@ -11,16 +11,12 @@ import { applyCors, withErrorHandling } from "../../lib/http.js";
 import { logger } from "../../lib/logger.js";
 import { assertFigmaUserId, assertUuid } from "../../lib/validators.js";
 import { ValidationError } from "../../lib/errors.js";
+import { FIGMA_OAUTH_SCOPES } from "../../lib/figma-oauth.js";
 
-// The backend only ever calls the Figma webhooks API (register + delete), so
-// `webhooks:write` is the sole scope required. Two earlier problems are both
-// avoided by using a single scope: (1) Figma's OAuth follows the OAuth2 spec
-// where the `scope` param is SPACE-delimited, but the old value was
-// comma-joined ("files:read,webhooks:write"), which Figma parsed as one
-// invalid scope → "Invalid scopes for app"; (2) files:read was never used
-// (least privilege). If multiple scopes are ever needed, join them with a
-// SPACE, not a comma.
-const SCOPES = "webhooks:write";
+// Scopes are defined once in figma-oauth.js (SPACE-delimited — a comma-joined
+// value is parsed by Figma as one invalid scope, "Invalid scopes for app").
+// `webhooks:write` registers/deletes the LIBRARY_PUBLISH webhook; `webhooks:read`
+// lists a file's webhooks to verify file access for the org-shared config.
 
 export default withErrorHandling(
   /**
@@ -63,7 +59,7 @@ export default withErrorHandling(
     const url = new URL("https://www.figma.com/oauth");
     url.searchParams.set("client_id", envOrThrow("FIGMA_CLIENT_ID"));
     url.searchParams.set("redirect_uri", redirectUri);
-    url.searchParams.set("scope", SCOPES);
+    url.searchParams.set("scope", FIGMA_OAUTH_SCOPES);
     url.searchParams.set("state", state);
     url.searchParams.set("response_type", "code");
 
