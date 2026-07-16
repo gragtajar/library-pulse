@@ -432,15 +432,20 @@
           </div>
         </div>
 
-        <!-- Step 1: Connect Slack -->
+        <!-- Step 2: Connect Slack -->
         <div class="step" id="step-slack">
-          <div class="step-num active" id="step-slack-num">1</div>
+          <div class="step-num pending" id="step-slack-num">2</div>
           <div class="step-content">
             <div class="step-title">Connect Slack</div>
             <div class="step-desc">
               Authorize Library Pulse to post messages to your Slack workspace.
             </div>
-            <button class="btn btn-secondary" id="btn-connect-slack" onclick="connectSlack()">
+            <button
+              class="btn btn-secondary"
+              id="btn-connect-slack"
+              onclick="connectSlack()"
+              disabled
+            >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path
                   d="M3.36 10.04a1.68 1.68 0 1 1-1.68-1.68h1.68v1.68zm.84 0a1.68 1.68 0 1 1 3.36 0v4.28a1.68 1.68 0 1 1-3.36 0v-4.28zM5.96 3.36a1.68 1.68 0 1 1 1.68-1.68v1.68H5.96zm0 .84a1.68 1.68 0 0 1 0 3.36H1.68a1.68 1.68 0 0 1 0-3.36h4.28zM12.64 5.96a1.68 1.68 0 1 1 1.68 1.68h-1.68V5.96zm-.84 0a1.68 1.68 0 0 1-3.36 0V1.68a1.68 1.68 0 0 1 3.36 0v4.28zM10.04 12.64a1.68 1.68 0 1 1-1.68 1.68v-1.68h1.68zm0-.84a1.68 1.68 0 0 1 0-3.36h4.28a1.68 1.68 0 0 1 0 3.36h-4.28z"
@@ -453,91 +458,57 @@
           </div>
         </div>
 
-        <!-- Step 2: Configure -->
-        <div class="step" id="step-config">
-          <div class="step-num pending" id="step-config-num">2</div>
+        <!-- Step 3: Select file — the file the plugin was opened in (display only) -->
+        <div class="step" id="step-file">
+          <div class="step-num pending" id="step-file-num">3</div>
           <div class="step-content">
-            <div class="step-title">Configure</div>
-            <div class="step-desc">Select a Figma file and Slack channels.</div>
+            <div class="step-title">Select file</div>
+            <div class="step-desc">Notifications are set up for the file you have open.</div>
+
+            <div class="file-option selected" id="file-display" style="cursor: default">
+              <div class="file-info">
+                <div class="file-name" id="current-file-name">Loading…</div>
+                <div class="file-key" id="current-file-key">—</div>
+              </div>
+              <span class="badge badge-success" style="font-size: 10px">Current file</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4: Add channels -->
+        <div class="step" id="step-channels">
+          <div class="step-num pending" id="step-channels-num">4</div>
+          <div class="step-content">
+            <div class="step-title">
+              Add Slack channels
+              <span style="font-weight: 400; color: var(--figma-color-text-tertiary, #b3b3b3)"
+                >(1–3)</span
+              >
+            </div>
+            <div class="step-desc">Choose where publish notifications get posted.</div>
 
             <div id="config-form" style="opacity: 0.5; pointer-events: none">
-              <!-- File selection -->
-              <div class="section">
-                <h2>Figma File</h2>
+              <div class="channels-list" id="channels-list"></div>
 
-                <div
-                  class="file-option selected"
-                  id="opt-current"
-                  onclick="selectFileOption('current')"
+              <div style="display: flex; gap: 6px" id="channel-add-row">
+                <div class="input-group" style="flex: 1; margin-bottom: 0">
+                  <input
+                    type="text"
+                    id="input-channel"
+                    placeholder="Channel ID (e.g. C046B2FRZ8W)"
+                  />
+                </div>
+                <button
+                  class="btn btn-secondary btn-sm"
+                  onclick="addChannel()"
+                  id="btn-add-channel"
+                  style="height: 33px; margin-top: 0"
                 >
-                  <div class="radio"></div>
-                  <div class="file-info">
-                    <div class="file-name" id="current-file-name">Loading…</div>
-                    <div class="file-key" id="current-file-key">—</div>
-                  </div>
-                  <span class="badge badge-success" style="font-size: 10px">Current file</span>
-                </div>
-
-                <div class="file-option" id="opt-manual" onclick="selectFileOption('manual')">
-                  <div class="radio"></div>
-                  <div class="file-info">
-                    <div class="file-name">Enter file ID manually</div>
-                    <div class="file-key">Use a different file</div>
-                  </div>
-                </div>
-
-                <div id="manual-input-wrap" style="display: none; margin-top: 8px">
-                  <div class="input-group">
-                    <label>File ID or URL</label>
-                    <input
-                      type="text"
-                      id="input-file-id"
-                      placeholder="e.g. jxunc0ljQa3mKVki8K5kj9 or full Figma URL"
-                    />
-                    <div class="hint">
-                      Paste the file key from the URL: figma.com/file/<strong>THIS_PART</strong>/…
-                    </div>
-                  </div>
-                  <div class="input-group">
-                    <label>File name (optional)</label>
-                    <input type="text" id="input-file-name" placeholder="e.g. My Design System" />
-                  </div>
-                </div>
+                  Add
+                </button>
               </div>
-
-              <hr class="divider" />
-
-              <!-- Channel entry -->
-              <div class="section">
-                <h2>
-                  Slack Channels
-                  <span style="font-weight: 400; color: var(--figma-color-text-tertiary, #b3b3b3)"
-                    >(1–3)</span
-                  >
-                </h2>
-
-                <div class="channels-list" id="channels-list"></div>
-
-                <div style="display: flex; gap: 6px" id="channel-add-row">
-                  <div class="input-group" style="flex: 1; margin-bottom: 0">
-                    <input
-                      type="text"
-                      id="input-channel"
-                      placeholder="Channel ID (e.g. C046B2FRZ8W)"
-                    />
-                  </div>
-                  <button
-                    class="btn btn-secondary btn-sm"
-                    onclick="addChannel()"
-                    id="btn-add-channel"
-                    style="height: 33px; margin-top: 0"
-                  >
-                    Add
-                  </button>
-                </div>
-                <div class="hint" style="margin-top: 4px">
-                  Right-click a Slack channel → View channel details → scroll to find Channel ID.
-                </div>
+              <div class="hint" style="margin-top: 4px">
+                Right-click a Slack channel → View channel details → scroll to find Channel ID.
               </div>
             </div>
           </div>
@@ -629,7 +600,6 @@
         slackTeamName: null,
         figmaConnected: false,
         sessionToken: null,
-        fileOption: "current",
         channels: [],
         configId: null,
       };
@@ -790,29 +760,39 @@
       // ── Setup state management ──
       function updateSetupState() {
         const slackNum = document.getElementById("step-slack-num");
-        const configNum = document.getElementById("step-config-num");
+        const slackBtn = document.getElementById("btn-connect-slack");
+        const fileNum = document.getElementById("step-file-num");
+        const channelsNum = document.getElementById("step-channels-num");
         const configForm = document.getElementById("config-form");
 
-        // Step 1 — Slack
+        // Step 1 (Connect Figma) is driven by startFigmaAuto / markFigmaConnected /
+        // figmaBannerError, which own the #figma-banner-icon states.
+
+        // Step 2 — Connect Slack — unlocks only once Figma (step 1) is connected.
         if (app.slackConnected) {
           slackNum.className = "step-num done";
           slackNum.textContent = "✓";
-          const slackBtn = document.getElementById("btn-connect-slack");
           slackBtn.textContent = `Connected to ${app.slackTeamName || "Slack"}`;
           slackBtn.disabled = true;
         } else {
-          slackNum.className = "step-num active";
-          slackNum.textContent = "1";
+          slackNum.className = app.figmaConnected ? "step-num active" : "step-num pending";
+          slackNum.textContent = "2";
+          slackBtn.disabled = !app.figmaConnected;
         }
 
-        // Step 2 — Configure unlocks once Slack is connected AND Figma has finished
-        // connecting automatically.
-        if (app.slackConnected && app.figmaConnected) {
-          configNum.className = "step-num active";
+        // Step 3 — Select file — display-only, so it's satisfied as soon as it
+        // unlocks (Slack connected) and we have the current file key.
+        const fileReady = app.slackConnected && app.figmaConnected && !!app.fileKey;
+        fileNum.className = fileReady ? "step-num done" : "step-num pending";
+        fileNum.textContent = fileReady ? "✓" : "3";
+
+        // Step 4 — Add channels — unlocks once the file step (step 3) is satisfied.
+        if (fileReady) {
+          channelsNum.className = "step-num active";
           configForm.style.opacity = "1";
           configForm.style.pointerEvents = "auto";
         } else {
-          configNum.className = "step-num pending";
+          channelsNum.className = "step-num pending";
           configForm.style.opacity = "0.5";
           configForm.style.pointerEvents = "none";
         }
@@ -1086,16 +1066,6 @@
         }
       }
 
-      // ── File selection ──
-      function selectFileOption(option) {
-        app.fileOption = option;
-        document.getElementById("opt-current").classList.toggle("selected", option === "current");
-        document.getElementById("opt-manual").classList.toggle("selected", option === "manual");
-        document.getElementById("manual-input-wrap").style.display =
-          option === "manual" ? "block" : "none";
-        updateSaveButton();
-      }
-
       // ── Channel management ──
       function addChannel() {
         const input = document.getElementById("input-channel");
@@ -1157,10 +1127,6 @@
             if (e.key === "Enter") addChannel();
           });
         }
-        const fileInput = document.getElementById("input-file-id");
-        if (fileInput) {
-          fileInput.addEventListener("input", () => updateSaveButton());
-        }
       });
 
       // ── Save button state ──
@@ -1168,23 +1134,10 @@
         const btn = document.getElementById("btn-save");
         if (!btn) return;
 
-        const hasFile =
-          app.fileOption === "current"
-            ? !!app.fileKey
-            : !!document.getElementById("input-file-id")?.value.trim();
+        const hasFile = !!app.fileKey;
         const hasChannels = app.channels.length >= 1;
 
         btn.disabled = !(hasFile && hasChannels && app.slackConnected && app.figmaConnected);
-      }
-
-      // ── Extract file key from URL or raw key ──
-      function parseFileKey(input) {
-        const trimmed = input.trim();
-        // Match figma.com/file/KEY/... or figma.com/design/KEY/...
-        const urlMatch = trimmed.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)/);
-        if (urlMatch) return urlMatch[1];
-        // Assume it's a raw key
-        return trimmed;
       }
 
       // ── Save configuration ──
@@ -1193,14 +1146,8 @@
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner"></span> Saving…';
 
-        const fileKey =
-          app.fileOption === "current"
-            ? app.fileKey
-            : parseFileKey(document.getElementById("input-file-id").value);
-        const fileName =
-          app.fileOption === "current"
-            ? app.fileName
-            : document.getElementById("input-file-name").value.trim() || null;
+        const fileKey = app.fileKey;
+        const fileName = app.fileName;
 
         try {
           const res = await api(`/api/config`, {
