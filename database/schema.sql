@@ -31,16 +31,18 @@ CREATE TABLE figma_tokens (
   access_token_enc  TEXT NOT NULL,
   refresh_token_enc TEXT,
   expires_at        TIMESTAMPTZ,
+  scopes            TEXT,                       -- granted OAuth scopes (space-delimited)
   created_at        TIMESTAMPTZ DEFAULT NOW(),
   updated_at        TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ────────────────────────────────────────────────
--- 3. Registered Figma webhooks (file context, one per user+file)
+-- 3. Registered Figma webhooks (file context, one per file)
 -- ────────────────────────────────────────────────
--- Webhooks are registered with the registrant's own Figma OAuth token on the
--- "file" context, so each (user, file) pair has its own webhook. `figma_team_id`
--- is kept only for backward compatibility with any legacy team-context rows.
+-- Webhooks are registered on the "file" context with the original setter's own
+-- Figma OAuth token. The config is org-shared, so there is exactly ONE webhook
+-- per file (registered_by records who set it up). `figma_team_id` is kept only
+-- for backward compatibility with any legacy team-context rows.
 CREATE TABLE figma_webhooks (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   figma_user_id   TEXT,
@@ -54,25 +56,31 @@ CREATE TABLE figma_webhooks (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_webhooks_webhook_id ON figma_webhooks(webhook_id);
-CREATE INDEX idx_webhooks_context_id ON figma_webhooks(context_id);
-CREATE UNIQUE INDEX uq_webhooks_user_context ON figma_webhooks(figma_user_id, context_id);
+CREATE UNIQUE INDEX uq_webhooks_context ON figma_webhooks(context_id);
 
 -- ────────────────────────────────────────────────
 -- 4. Core config: file → Slack channel mapping
 -- ────────────────────────────────────────────────
+-- Org-shared: keyed by FILE, not user. One config per file; anyone with edit
+-- access to the file manages it. `created_by` is the original setter (only they
+-- can tear down the Figma webhook). `figma_user_id` is retained (= created_by).
 CREATE TABLE configurations (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  figma_user_id   TEXT NOT NULL,
-  figma_team_id   TEXT,                        -- unused for file-context webhooks
-  figma_file_key  TEXT NOT NULL,
-  figma_file_name TEXT,
-  slack_team_id   TEXT NOT NULL REFERENCES slack_installations(slack_team_id) ON DELETE CASCADE,
-  channels        JSONB NOT NULL DEFAULT '[]',
-  is_active       BOOLEAN DEFAULT TRUE,
-  created_at      TIMESTAMPTZ DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  figma_user_id       TEXT NOT NULL,
+  created_by          TEXT,                        -- original setter's Figma user id
+  figma_team_id       TEXT,                        -- unused for file-context webhooks
+  figma_file_key      TEXT NOT NULL,
+  figma_file_name     TEXT,
+  slack_team_id       TEXT NOT NULL REFERENCES slack_installations(slack_team_id) ON DELETE CASCADE,
+  channels            JSONB NOT NULL DEFAULT '[]',
+  is_active           BOOLEAN DEFAULT TRUE,
+  delivery_status     TEXT NOT NULL DEFAULT 'ok'
+                        CHECK (delivery_status IN ('ok','slack_revoked','figma_revoked','send_failing')),
+  last_delivery_error TEXT,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW(),
 
-  UNIQUE(figma_user_id, figma_file_key)
+  UNIQUE(figma_file_key)
 );
 
 -- ────────────────────────────────────────────────

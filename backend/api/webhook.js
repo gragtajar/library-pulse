@@ -95,11 +95,14 @@ export default withErrorHandling(
 
     const eventKey = deriveEventKey(payload);
 
-    // ── Look up configs owned by the webhook's registrant for this file ──
+    // ── Look up the file's active config (org-shared: one config per file) ──
+    // The webhook is file-scoped and its passcode was just verified, so the file
+    // key is the authority here — not the registrant. `webhook_id`/passcode bind
+    // the request to this exact file; the config is whichever active one targets
+    // that file. (Deactivated configs are skipped, so a torn-down setup no-ops.)
     const { data: configs, error: cfgErr } = await supabase
       .from("configurations")
       .select("id, figma_file_key, channels, slack_installations(bot_token_enc, slack_team_name)")
-      .eq("figma_user_id", wh.figma_user_id)
       .eq("figma_file_key", fileKey)
       .eq("is_active", true);
 
