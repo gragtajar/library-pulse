@@ -559,6 +559,36 @@
                 Pick up to 3 channels. Private channels appear only if the Library Pulse bot has
                 been added to them.
               </div>
+
+              <!-- Custom message (optional, org-shared) with @-mention composer -->
+              <div class="input-group" style="margin-top: 14px; margin-bottom: 0">
+                <label for="custom-message">Custom message (optional)</label>
+                <div class="channel-picker" id="mention-picker">
+                  <textarea
+                    id="custom-message"
+                    rows="3"
+                    maxlength="500"
+                    placeholder="Posted with every notification. Type @ to mention people or groups."
+                    style="
+                      width: 100%;
+                      padding: 8px 10px;
+                      font-size: 12px;
+                      font-family: inherit;
+                      line-height: 1.5;
+                      border: 1px solid var(--figma-color-border, #e5e5e5);
+                      border-radius: 6px;
+                      background: var(--figma-color-bg, #fff);
+                      color: var(--figma-color-text, #333);
+                      outline: none;
+                      resize: vertical;
+                    "
+                  ></textarea>
+                  <div class="channel-dropdown" id="mention-dropdown" style="display: none"></div>
+                </div>
+                <div class="hint" id="mention-hint" style="margin-top: 4px">
+                  Shared with everyone on this file — any editor can change it later.
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -606,6 +636,12 @@
           <div class="dash-row">
             <span class="dash-label">Channels</span>
             <span class="dash-value" id="dash-channels">—</span>
+          </div>
+          <div class="dash-row" id="dash-note-row" style="display: none">
+            <span class="dash-label">Team note</span>
+            <span class="dash-value" id="dash-note" style="text-align: right; max-width: 240px"
+              >—</span
+            >
           </div>
         </div>
 
@@ -681,6 +717,11 @@
         channelsLoading: false,
         channelsError: null,
         channelsForKey: null,
+        customMentions: [],
+        mentionDir: null,
+        mentionDirLoading: false,
+        mentionDirError: null,
+        mentionDirForKey: null,
       };
 
       // ── Figma plugin message bus ──
@@ -1282,13 +1323,181 @@
           app.channels.length >= 3 ? "none" : "block";
       }
 
-      // Wire the channel search box.
+      // ── Custom message @-mention composer ──
+      //
+      // The textarea holds plain text with human-readable "@Label" mentions.
+      // Picking from the dropdown records { id, type, label } in
+      // app.customMentions; the backend swaps "@Label" for the real Slack
+      // token at delivery. Free-typed @text that was never picked stays plain
+      // text (and can never ping — the backend escapes it).
+      async function loadMentionDir() {
+        const q = channelQuery();
+        if (!q || app.mentionDirLoading) return;
+        if (app.mentionDir && app.mentionDirForKey === q.key) return;
+
+        app.mentionDirLoading = true;
+        app.mentionDirError = null;
+        app.mentionDirForKey = q.key;
+        try {
+          const res = await api(`/api/slack/mentions?${q.qs}`);
+          const data = await readJson(res);
+          if (!res.ok) throw new Error(data.error || "mentions_load_failed");
+          app.mentionDir = {
+            users: Array.isArray(data.users) ? data.users : [],
+            usergroups: Array.isArray(data.usergroups) ? data.usergroups : [],
+          };
+        } catch (e) {
+          app.mentionDir = null;
+          app.mentionDirError = e && e.message ? e.message : "mentions_load_failed";
+        } finally {
+          app.mentionDirLoading = false;
+          renderMentionDropdown();
+          updateMentionHint();
+        }
+      }
+
+      function updateMentionHint() {
+        const hint = document.getElementById("mention-hint");
+        if (!hint) return;
+        if (app.mentionDirError === "slack_reauth_required") {
+          hint.textContent =
+            "@mentions are unavailable until Slack is reconnected (new permissions). The note itself still works.";
+          hint.style.color = "#9a6700";
+        } else {
+          hint.textContent = "Shared with everyone on this file — any editor can change it later.";
+          hint.style.color = "";
+        }
+      }
+
+      // The "@query" being typed at the caret, or null. The @ must start a
+      // word (start of text or after whitespace); newlines end a query.
+      function activeMentionQuery() {
+        const ta = document.getElementById("custom-message");
+        if (!ta) return null;
+        const upToCaret = ta.value.slice(0, ta.selectionStart);
+        const at = upToCaret.lastIndexOf("@");
+        if (at === -1) return null;
+        if (at > 0 && !/\s/.test(upToCaret[at - 1])) return null;
+        const query = upToCaret.slice(at + 1);
+        if (query.length > 40 || query.includes("\n")) return null;
+        return { at, query };
+      }
+
+      function matchMentions(query) {
+        if (!app.mentionDir) return [];
+        const q = query.toLowerCase();
+        const groups = app.mentionDir.usergroups
+          .filter(
+            (g) => !q || g.handle.toLowerCase().includes(q) || g.name.toLowerCase().includes(q),
+          )
+          .map((g) => ({ id: g.id, type: "usergroup", label: g.handle, display: g.name }));
+        const users = app.mentionDir.users
+          .filter((u) => !q || u.name.toLowerCase().includes(q))
+          .map((u) => ({ id: u.id, type: "user", label: u.name, display: u.name }));
+        return groups.concat(users).slice(0, 8);
+      }
+
+      function hideMentionDropdown() {
+        const dd = document.getElementById("mention-dropdown");
+        if (dd) dd.style.display = "none";
+      }
+
+      function renderMentionDropdown() {
+        const dd = document.getElementById("mention-dropdown");
+        if (!dd) return;
+        const pos = activeMentionQuery();
+        if (!pos || app.mentionDirError) return hideMentionDropdown();
+
+        dd.replaceChildren();
+        if (app.mentionDirLoading) {
+          dd.style.display = "block";
+          return dd.appendChild(emptyRow("Loading directory…"));
+        }
+
+        const matches = matchMentions(pos.query);
+        // A non-empty query with zero matches means the user is past a mention
+        // (or typing plain text) — get out of the way instead of showing noise.
+        if (matches.length === 0) return hideMentionDropdown();
+
+        dd.style.display = "block";
+        for (const m of matches) {
+          const opt = document.createElement("div");
+          opt.className = "channel-option";
+          const icon = document.createElement("span");
+          icon.className = "ch-icon";
+          icon.textContent = m.type === "usergroup" ? "👥" : "@";
+          const name = document.createElement("span");
+          name.className = "ch-name";
+          name.textContent = m.type === "usergroup" ? `${m.label} — ${m.display}` : m.display;
+          opt.append(icon, name);
+          opt.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            insertMention(m);
+          });
+          dd.appendChild(opt);
+        }
+      }
+
+      function insertMention(m) {
+        const ta = document.getElementById("custom-message");
+        const pos = activeMentionQuery();
+        if (!ta || !pos) return;
+        if (!app.customMentions.some((x) => x.id === m.id) && app.customMentions.length >= 20) {
+          notify("Maximum 20 mentions per note", true);
+          return;
+        }
+        const before = ta.value.slice(0, pos.at);
+        const after = ta.value.slice(ta.selectionStart);
+        const inserted = `@${m.label} `;
+        ta.value = before + inserted + after;
+        const caret = (before + inserted).length;
+        ta.setSelectionRange(caret, caret);
+        ta.focus();
+        if (!app.customMentions.some((x) => x.id === m.id)) {
+          app.customMentions.push({ id: m.id, type: m.type, label: m.label });
+        }
+        hideMentionDropdown();
+      }
+
+      // Keep only mentions whose "@label" still appears in the text — labels
+      // the user edited away are dropped so stale ids never reach the backend.
+      function pruneMentions(text) {
+        return app.customMentions
+          .filter((m) => text.includes(`@${m.label}`))
+          .map((m) => ({ id: m.id, type: m.type, label: m.label }));
+      }
+
+      function onMentionInput() {
+        if (activeMentionQuery()) {
+          loadMentionDir();
+          renderMentionDropdown();
+        } else {
+          hideMentionDropdown();
+        }
+      }
+
+      // Wire the channel search box and the mention composer.
       document.addEventListener("DOMContentLoaded", () => {
         const search = document.getElementById("channel-search");
-        if (!search) return;
-        search.addEventListener("focus", openDropdown);
-        search.addEventListener("input", renderDropdown);
-        search.addEventListener("blur", () => setTimeout(closeDropdown, 150));
+        if (search) {
+          search.addEventListener("focus", openDropdown);
+          search.addEventListener("input", renderDropdown);
+          search.addEventListener("blur", () => setTimeout(closeDropdown, 150));
+        }
+
+        const ta = document.getElementById("custom-message");
+        if (ta) {
+          ta.addEventListener("input", onMentionInput);
+          ta.addEventListener("click", onMentionInput);
+          ta.addEventListener("focus", () => {
+            loadMentionDir();
+            onMentionInput();
+          });
+          ta.addEventListener("blur", () => setTimeout(hideMentionDropdown, 150));
+          ta.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") hideMentionDropdown();
+          });
+        }
       });
 
       // ── Save button state ──
@@ -1312,18 +1521,30 @@
         // setup → POST (create).
         const editing = !!app.configId;
 
+        // Optional team note: plain text + the picker-chosen mentions still
+        // present in it (backend re-validates both).
+        const noteText = (document.getElementById("custom-message")?.value || "").trim();
+        const noteMentions = noteText ? pruneMentions(noteText) : [];
+
         try {
           const res = await api(`/api/config`, {
             method: editing ? "PUT" : "POST",
             body: JSON.stringify(
               editing
-                ? { fileKey: app.fileKey, channels: app.channels }
+                ? {
+                    fileKey: app.fileKey,
+                    channels: app.channels,
+                    customMessage: noteText || null,
+                    customMentions: noteMentions,
+                  }
                 : {
                     figmaUserId: app.currentUser?.id,
                     fileKey: app.fileKey,
                     fileName: app.fileName,
                     slackTeamId: app.slackTeamId,
                     channels: app.channels,
+                    customMessage: noteText || null,
+                    customMentions: noteMentions,
                   },
             ),
           });
@@ -1370,6 +1591,20 @@
           "—";
         document.getElementById("dash-channels").textContent =
           (config.channels || []).map((c) => c.name || c.id || c).join(", ") || "—";
+
+        // Team note (org-shared, optional).
+        app.customMentions = Array.isArray(config.custom_mentions)
+          ? config.custom_mentions.map((m) => ({ id: m.id, type: m.type, label: m.label }))
+          : [];
+        const noteRow = document.getElementById("dash-note-row");
+        const noteEl = document.getElementById("dash-note");
+        if (typeof config.custom_message === "string" && config.custom_message) {
+          noteEl.textContent = config.custom_message;
+          noteRow.style.display = "flex";
+        } else {
+          noteEl.textContent = "—";
+          noteRow.style.display = "none";
+        }
 
         document.getElementById("dash-shared-note").textContent = isOwner
           ? "You set this up. It's shared with everyone who can edit this file."
@@ -1463,6 +1698,8 @@
             return "You don't have access to this file.";
           case "figma_not_connected":
             return "Connect Figma first.";
+          case "slack_reauth_required":
+            return "Slack needs reconnecting to enable this (new permissions were added).";
           case "config_exists":
             return "This file is already set up.";
           default:
@@ -1493,11 +1730,21 @@
       }
 
       function editConfig() {
-        // Reopen setup pre-filled with the shared config's channels. app.configId
-        // stays set, so Save does a PUT (edit) rather than a create.
+        // Reopen setup pre-filled with the shared config's channels and note.
+        // app.configId stays set, so Save does a PUT (edit) rather than a create.
         app.channels = (app.currentConfig?.channels || []).map((c) =>
           typeof c === "string" ? { id: c } : { id: c.id, name: c.name },
         );
+        app.customMentions = Array.isArray(app.currentConfig?.custom_mentions)
+          ? app.currentConfig.custom_mentions.map((m) => ({
+              id: m.id,
+              type: m.type,
+              label: m.label,
+            }))
+          : [];
+        const ta = document.getElementById("custom-message");
+        if (ta) ta.value = app.currentConfig?.custom_message || "";
+        updateMentionHint();
         showView("setup");
         if (app.figmaConnected) markFigmaConnected();
         updateSetupState();
@@ -1551,7 +1798,10 @@
             app.configId = null;
             app.currentConfig = null;
             app.channels = [];
+            app.customMentions = [];
             app.isOwner = false;
+            const ta = document.getElementById("custom-message");
+            if (ta) ta.value = "";
             notify("Figma connection removed. Notifications are off for this file.");
             showView("setup");
             if (app.figmaConnected) markFigmaConnected();
