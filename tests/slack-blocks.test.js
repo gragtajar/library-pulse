@@ -61,6 +61,24 @@ describe("slack-blocks", () => {
     expect(section).toBeTruthy();
   });
 
+  it("renders the publish time as a viewer-local <!date> token with a UTC fallback", () => {
+    const blocks = buildSlackBlocks(
+      { file_name: "x", file_key: "k", timestamp: "2026-07-30T14:15:00Z" },
+      "k",
+    );
+    const when = findText(blocks, (t) => t.includes("*When:*"));
+    // 2026-07-30T14:15:00Z → epoch 1785420900; fallback rendered in UTC.
+    expect(when).toContain("<!date^1785420900^{date_short_pretty} at {time}|");
+    expect(when).toContain("2:15 PM UTC>");
+  });
+
+  it("falls back to 'just now' when the timestamp is missing or invalid", () => {
+    const none = buildSlackBlocks({ file_name: "x", file_key: "k" }, "k");
+    expect(findText(none, (t) => t.includes("*When:*"))).toContain("just now");
+    const bad = buildSlackBlocks({ file_name: "x", file_key: "k", timestamp: "not-a-date" }, "k");
+    expect(findText(bad, (t) => t.includes("*When:*"))).toContain("just now");
+  });
+
   it("fallbackText produces a non-empty string with publisher and file", () => {
     expect(fallbackText({ file_name: "DS", triggered_by: { handle: "@me" } })).toMatch(/@me .* DS/);
   });

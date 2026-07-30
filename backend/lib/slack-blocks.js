@@ -26,12 +26,7 @@ export function buildSlackBlocks(payload, fileKey) {
   const publisher = payload.triggered_by?.email || payload.triggered_by?.handle || "Unknown user";
   const description = typeof payload.description === "string" ? payload.description.trim() : "";
   const fileName = payload.file_name || "Untitled";
-  const timestamp = payload.timestamp
-    ? new Date(payload.timestamp).toLocaleString("en-US", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })
-    : "just now";
+  const timestamp = formatWhen(payload.timestamp);
   const figmaLink = `https://www.figma.com/file/${encodeURIComponent(payload.file_key || fileKey)}`;
 
   const categories = [
@@ -69,11 +64,16 @@ export function buildSlackBlocks(payload, fileKey) {
   });
 
   // ── Publisher + timestamp ──
+  // `timestamp` is NOT escapeSlack'd: it is either the literal "just now" or a
+  // fully server-constructed `<!date^…>` token (see formatWhen) whose angle
+  // brackets are the point — Slack renders it in each viewer's own timezone.
+  // No user-controlled bytes flow into it (epoch is a number, fallback comes
+  // from toLocaleString of a parsed Date).
   blocks.push({
     type: "section",
     fields: [
       { type: "mrkdwn", text: `*Published by:*\n${escapeSlack(publisher)}` },
-      { type: "mrkdwn", text: `*When:*\n${escapeSlack(timestamp)}` },
+      { type: "mrkdwn", text: `*When:*\n${timestamp}` },
     ],
   });
 
@@ -137,6 +137,28 @@ export function buildSlackBlocks(payload, fileKey) {
   });
 
   return blocks;
+}
+
+/**
+ * Render the publish time so each viewer sees it in their OWN timezone, via
+ * Slack's date token: `<!date^epoch^{date_short_pretty} at {time}|fallback>`.
+ * The fallback (required by Slack for older clients) is the UTC rendering the
+ * message used before this change. Missing/invalid timestamp → "just now".
+ *
+ * @param {unknown} raw
+ * @returns {string}
+ */
+function formatWhen(raw) {
+  if (typeof raw !== "string" && typeof raw !== "number") return "just now";
+  const ms = new Date(raw).getTime();
+  if (!Number.isFinite(ms)) return "just now";
+  const epoch = Math.floor(ms / 1000);
+  const fallback = new Date(ms).toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  });
+  return `<!date^${epoch}^{date_short_pretty} at {time}|${fallback} UTC>`;
 }
 
 /**
