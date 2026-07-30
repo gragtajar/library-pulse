@@ -101,11 +101,13 @@ export default withErrorHandling(
     // key is the authority here — not the registrant. `webhook_id`/passcode bind
     // the request to this exact file; the config is whichever active one targets
     // that file. (Deactivated configs are skipped, so a torn-down setup no-ops.)
+    // `*` instead of an explicit column list on purpose: the optional columns
+    // added by migration 004 (custom_message, custom_mentions) must not break
+    // deploys against a not-yet-migrated database — absent columns simply
+    // yield absent keys, and the code below is null-safe about them.
     const { data: configs, error: cfgErr } = await supabase
       .from("configurations")
-      .select(
-        "id, figma_file_key, channels, delivery_status, slack_installations(bot_token_enc, slack_team_name)",
-      )
+      .select("*, slack_installations(bot_token_enc, slack_team_name)")
       .eq("figma_file_key", fileKey)
       .eq("is_active", true);
 
@@ -119,7 +121,6 @@ export default withErrorHandling(
       return res.status(200).json({ status: "no_configs" });
     }
 
-    const blocks = buildSlackBlocks(payload, fileKey);
     const text = fallbackText(payload);
 
     /** @type {Array<{configId: string, sent: number, failed: number, skipped: number}>} */
@@ -142,6 +143,13 @@ export default withErrorHandling(
         allResults.push({ configId: config.id, sent: 0, failed: 0, skipped: 0 });
         continue;
       }
+
+      // Blocks are built per config: each file's config carries its own
+      // optional team note (custom_message + validated custom_mentions).
+      const blocks = buildSlackBlocks(payload, fileKey, {
+        text: /** @type {any} */ (config).custom_message ?? null,
+        mentions: /** @type {any} */ (config).custom_mentions ?? [],
+      });
 
       const channels = /** @type {Array<{id?: string}|string>} */ (config.channels) ?? [];
       const channelIds = channels

@@ -75,6 +75,62 @@ export function assertUuid(v) {
   return v;
 }
 
+/** Slack user IDs (`U…`/`W…`) and user-group IDs (`S…`). */
+const SLACK_USER_ID = /^[UW][A-Z0-9]{2,20}$/;
+const SLACK_USERGROUP_ID = /^S[A-Z0-9]{2,20}$/;
+
+const CUSTOM_MESSAGE_MAX = 500;
+const MENTION_LABEL_MAX = 80;
+const MENTIONS_MAX = 20;
+
+/**
+ * Validate the optional per-file custom message. Plain text only (Slack
+ * mention tokens are NEVER accepted here — they're built server-side from the
+ * validated mention list). Returns the trimmed string, or null when empty.
+ *
+ * @param {unknown} v
+ * @returns {string | null}
+ */
+export function assertCustomMessage(v) {
+  if (v == null || v === "") return null;
+  if (typeof v !== "string") throw new ValidationError("Custom message must be a string");
+  const trimmed = v.trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.length > CUSTOM_MESSAGE_MAX) {
+    throw new ValidationError(`Custom message too long (max ${CUSTOM_MESSAGE_MAX} characters)`);
+  }
+  return trimmed;
+}
+
+/**
+ * Validate the picker-chosen mention list stored alongside the custom message.
+ * Each entry must be `{ id, type, label }` with a well-formed Slack id for its
+ * type — this is what makes server-side token substitution injection-proof.
+ *
+ * @param {unknown} v
+ * @returns {Array<{ id: string, type: "user" | "usergroup", label: string }>}
+ */
+export function assertMentionList(v) {
+  if (v == null) return [];
+  if (!Array.isArray(v) || v.length > MENTIONS_MAX) {
+    throw new ValidationError(`Provide at most ${MENTIONS_MAX} mentions`);
+  }
+  return v.map((entry) => {
+    const id = typeof entry?.id === "string" ? entry.id : "";
+    const type = entry?.type;
+    const label = typeof entry?.label === "string" ? entry.label.trim() : "";
+    if (type !== "user" && type !== "usergroup") {
+      throw new ValidationError("Mention type must be 'user' or 'usergroup'");
+    }
+    const idOk = type === "user" ? SLACK_USER_ID.test(id) : SLACK_USERGROUP_ID.test(id);
+    if (!idOk) throw new ValidationError(`Invalid Slack ${type} ID in mentions`);
+    if (!label || label.length > MENTION_LABEL_MAX) {
+      throw new ValidationError(`Mention label required (max ${MENTION_LABEL_MAX} characters)`);
+    }
+    return { id, type, label };
+  });
+}
+
 /**
  * Validate an array of 1–3 Slack channels. Accepts string IDs or
  * `{ id, name? }` objects.
@@ -101,4 +157,6 @@ export const _patterns = {
   FIGMA_FILE_KEY,
   FIGMA_NUMERIC_ID,
   UUID_V4,
+  SLACK_USER_ID,
+  SLACK_USERGROUP_ID,
 };

@@ -31,7 +31,13 @@ import { applyCors, fetchWithTimeout, withErrorHandling } from "../lib/http.js";
 import { logger } from "../lib/logger.js";
 import { requireSession } from "../lib/session.js";
 import { ForbiddenError, NotFoundError, UpstreamError, ValidationError } from "../lib/errors.js";
-import { assertChannelList, assertFigmaFileKey, assertUuid } from "../lib/validators.js";
+import {
+  assertChannelList,
+  assertCustomMessage,
+  assertFigmaFileKey,
+  assertMentionList,
+  assertUuid,
+} from "../lib/validators.js";
 import { assertFileAccess, getFigmaAccessToken } from "../lib/figma-access.js";
 
 const PG_UNIQUE_VIOLATION = "23505";
@@ -128,6 +134,15 @@ async function handlePost(req, res) {
   const fileName = typeof body.fileName === "string" ? body.fileName.slice(0, 200) : null;
   const channels = assertChannelList(body.channels);
 
+  // Optional team note (migration 004). Only touch the columns when the client
+  // sent the fields, so a pre-004 database never sees them.
+  /** @type {Record<string, unknown>} */
+  const noteFields = {};
+  if (body.customMessage !== undefined) {
+    noteFields.custom_message = assertCustomMessage(body.customMessage);
+    noteFields.custom_mentions = assertMentionList(body.customMentions);
+  }
+
   // One config per file. If it already exists and the caller isn't the setter,
   // they should be shown the shared view rather than clobbering it → 409.
   const { data: existing } = await supabase
@@ -149,6 +164,7 @@ async function handlePost(req, res) {
         slack_team_id: slackTeamId,
         channels,
         is_active: true,
+        ...noteFields,
       })
       .eq("id", existing.id)
       .select(CONFIG_SELECT)
@@ -173,6 +189,7 @@ async function handlePost(req, res) {
       slack_team_id: slackTeamId,
       channels,
       is_active: true,
+      ...noteFields,
     })
     .select(CONFIG_SELECT)
     .single();
@@ -219,6 +236,12 @@ async function handlePut(req, res) {
   if (typeof body.slackTeamId === "string" && body.slackTeamId)
     updates.slack_team_id = body.slackTeamId;
   if (typeof body.isActive === "boolean") updates.is_active = body.isActive;
+  // Optional team note — sending customMessage (even null/empty to clear it)
+  // updates both columns; the mention list is re-validated wholesale.
+  if (body.customMessage !== undefined) {
+    updates.custom_message = assertCustomMessage(body.customMessage);
+    updates.custom_mentions = assertMentionList(body.customMentions);
+  }
 
   if (Object.keys(updates).length === 0) {
     throw new ValidationError("No updatable fields provided");

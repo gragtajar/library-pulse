@@ -73,6 +73,8 @@ CREATE TABLE configurations (
   figma_file_name     TEXT,
   slack_team_id       TEXT NOT NULL REFERENCES slack_installations(slack_team_id) ON DELETE CASCADE,
   channels            JSONB NOT NULL DEFAULT '[]',
+  custom_message      TEXT,                        -- optional team note appended to every notification
+  custom_mentions     JSONB NOT NULL DEFAULT '[]', -- validated picker mentions [{id,type,label}]
   is_active           BOOLEAN DEFAULT TRUE,
   delivery_status     TEXT NOT NULL DEFAULT 'ok'
                         CHECK (delivery_status IN ('ok','slack_revoked','figma_revoked','send_failing')),

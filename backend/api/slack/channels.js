@@ -19,15 +19,12 @@
  * is at most MAX_PAGES calls.
  */
 
-import supabase from "../../lib/supabase.js";
-import { decrypt } from "../../lib/encryption.js";
 import { applyCors, fetchWithTimeout, withErrorHandling } from "../../lib/http.js";
 import { logger } from "../../lib/logger.js";
 import { requireSession } from "../../lib/session.js";
-import { NotFoundError, UpstreamError, ValidationError } from "../../lib/errors.js";
-import { assertFigmaFileKey } from "../../lib/validators.js";
-import { assertFileAccess } from "../../lib/figma-access.js";
+import { UpstreamError, ValidationError } from "../../lib/errors.js";
 import { normalizeChannels } from "../../lib/slack-channels.js";
+import { resolveWorkspaceToken } from "../../lib/slack-workspace.js";
 
 const PAGE_LIMIT = 200;
 const MAX_PAGES = 5; // up to 1000 channels
@@ -42,54 +39,16 @@ export default withErrorHandling(
     if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
     const callerId = requireSession(req);
-    const teamId = await resolveTeamId(
+    const { botToken } = await resolveWorkspaceToken(
       callerId,
       single(req.query.fileKey),
       single(req.query.slackTeamId),
     );
-    const botToken = await getBotToken(teamId);
 
     const channels = await listAllChannels(botToken);
     return res.status(200).json({ channels });
   },
 );
-
-/**
- * @param {string} callerId
- * @param {string} fileKey
- * @param {string} slackTeamId
- * @returns {Promise<string>}
- */
-async function resolveTeamId(callerId, fileKey, slackTeamId) {
-  if (fileKey) {
-    assertFigmaFileKey(fileKey);
-    const { data: cfg } = await supabase
-      .from("configurations")
-      .select("slack_team_id, created_by")
-      .eq("figma_file_key", fileKey)
-      .maybeSingle();
-    if (!cfg) throw new NotFoundError("config_not_found");
-    // Trust the setter; access-check other users (same rule as /api/config).
-    if (cfg.created_by !== callerId) await assertFileAccess(callerId, fileKey);
-    return cfg.slack_team_id;
-  }
-  if (slackTeamId) return slackTeamId;
-  throw new ValidationError("Provide fileKey or slackTeamId");
-}
-
-/**
- * @param {string} slackTeamId
- * @returns {Promise<string>}
- */
-async function getBotToken(slackTeamId) {
-  const { data: inst } = await supabase
-    .from("slack_installations")
-    .select("bot_token_enc")
-    .eq("slack_team_id", slackTeamId)
-    .maybeSingle();
-  if (!inst || !inst.bot_token_enc) throw new NotFoundError("slack_not_connected");
-  return decrypt(inst.bot_token_enc);
-}
 
 /**
  * Page through conversations.list and collect public + accessible private
