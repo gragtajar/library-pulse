@@ -14,10 +14,40 @@ const MAX_ITEMS_DISPLAY = 20;
 const MAX_DESCRIPTION_CHARS = 1500;
 
 /**
+ * Compose the team's custom note into mrkdwn: the free text is escapeSlack'd
+ * (so it can never ping or inject), then each picker-chosen mention has its
+ * "@label" occurrence swapped for the real Slack token — `<@U…>` for users,
+ * `<!subteam^S…>` for user groups. Labels are matched longest-first so
+ * "@design" never clobbers "@design-leads". A mention whose label was edited
+ * out of the text simply doesn't ping — graceful degradation, never an error.
+ *
+ * IDs are validated upstream (assertMentionList) — only well-formed U…/W…/S…
+ * ids ever reach the token templates, so the un-escaped tokens are safe.
+ *
+ * @param {string | null | undefined} text
+ * @param {Array<{ id: string, type: "user" | "usergroup", label: string }> | null | undefined} mentions
+ * @returns {string | null} mrkdwn, or null when there is no note
+ */
+export function composeCustomNote(text, mentions) {
+  if (typeof text !== "string" || text.trim().length === 0) return null;
+  let out = escapeSlack(text.trim());
+  const list = Array.isArray(mentions) ? [...mentions] : [];
+  list.sort((a, b) => (b.label?.length ?? 0) - (a.label?.length ?? 0));
+  for (const m of list) {
+    if (!m || typeof m.id !== "string" || typeof m.label !== "string") continue;
+    const token = m.type === "usergroup" ? `<!subteam^${m.id}>` : `<@${m.id}>`;
+    // The text was escaped, so search for the escaped form of "@label".
+    out = out.split(`@${escapeSlack(m.label)}`).join(token);
+  }
+  return out;
+}
+
+/**
  * @param {Record<string, any>} payload
  * @param {string} fileKey
+ * @param {{ text?: string | null, mentions?: Array<{ id: string, type: "user" | "usergroup", label: string }> } | null} [custom]
  */
-export function buildSlackBlocks(payload, fileKey) {
+export function buildSlackBlocks(payload, fileKey, custom = null) {
   // Figma's LIBRARY_PUBLISH payload only carries triggered_by.{id, handle} —
   // no email (verified against Figma's webhook docs). Prefer email in case
   // Figma ever adds it; otherwise the handle (display name) is what identifies
@@ -93,6 +123,15 @@ export function buildSlackBlocks(payload, fileKey) {
         type: "mrkdwn",
         text: "⚠️ *Description:* _No description provided — please add one when publishing!_",
       },
+    });
+  }
+
+  // ── Team custom note (org-shared, set in the plugin; §custom-message) ──
+  const note = composeCustomNote(custom?.text, custom?.mentions);
+  if (note) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `💬 ${note}` },
     });
   }
 
