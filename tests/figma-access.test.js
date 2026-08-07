@@ -3,10 +3,13 @@ import { describe, it, expect } from "vitest";
 import { FIGMA_OAUTH_SCOPES, scopeGranted, classifyAccess } from "../backend/lib/figma-oauth.js";
 
 describe("FIGMA_OAUTH_SCOPES", () => {
-  it("requests both webhook scopes", () => {
+  it("requests exactly the Figma-approved scope set", () => {
     const scopes = FIGMA_OAUTH_SCOPES.split(" ");
-    expect(scopes).toContain("webhooks:write");
-    expect(scopes).toContain("webhooks:read");
+    // Every scope listed here has passed Figma's app review. Adding an
+    // unapproved scope 400s every sign-in ("Invalid scopes for app").
+    expect(scopes.sort()).toEqual(
+      ["library_assets:read", "webhooks:read", "webhooks:write"].sort(),
+    );
   });
 
   it("is space-delimited (comma-joining is parsed by Figma as one invalid scope)", () => {

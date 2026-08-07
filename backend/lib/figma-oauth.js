@@ -17,6 +17,10 @@
  * - `webhooks:read` — list the webhooks registered on a file to confirm the
  *   caller can access that file before returning or mutating its shared config
  *   (see `figma-access.js`). Added in Batch 2.
+ * - `library_assets:read` — resolve one of the open file's published
+ *   style/component keys to the containing file's key
+ *   (api/figma/resolve-file.js), since Figma hides `figma.fileKey` from public
+ *   Community plugins. Approved by Figma review 2026-08.
  *
  * IMPORTANT: Figma's OAuth `scope` param is SPACE-delimited (OAuth2 spec). A
  * comma-joined value is parsed as a single invalid scope ("Invalid scopes for
@@ -25,13 +29,11 @@
  * ⚠️ NEVER add a scope here before Figma has APPROVED it for the app — Figma
  * rejects any authorize request containing an unapproved scope with
  * 400 "Invalid scopes for app", which bricks ALL sign-ins (this happened live
- * during the webhooks:read rollout). `library_assets:read` (file-key
- * resolution via published assets, see api/figma/resolve-file.js) is pending
- * review — append it here in a follow-up PR once approved.
+ * during the webhooks:read rollout).
  */
-export const FIGMA_OAUTH_SCOPES = "webhooks:write webhooks:read";
+export const FIGMA_OAUTH_SCOPES = "webhooks:write webhooks:read library_assets:read";
 
-/** Scope required by the published-asset → file-key resolver (pending review). */
+/** Scope required by the published-asset → file-key resolver. */
 export const LIBRARY_ASSETS_SCOPE = "library_assets:read";
 
 /**
