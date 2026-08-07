@@ -522,10 +522,23 @@
             <div class="file-option selected" id="file-display" style="cursor: default">
               <div class="file-info">
                 <div class="file-name" id="current-file-name">Loading…</div>
-                <div class="file-key" id="current-file-key">—</div>
+                <div class="file-key" id="current-file-key" style="display: none"></div>
               </div>
               <span class="badge badge-success" style="font-size: 10px">Current file</span>
             </div>
+
+            <!-- Automatic file identification. Figma hides the file id from
+                 Community plugins, so we resolve it from the file's own
+                 published styles/components via the backend. -->
+            <div class="hint" id="file-detect-status" style="display: none; margin-top: 6px"></div>
+            <button
+              class="btn btn-secondary btn-sm"
+              id="btn-file-retry"
+              onclick="retryFileDetection()"
+              style="display: none; margin-top: 8px"
+            >
+              Refresh
+            </button>
           </div>
         </div>
 
@@ -757,7 +770,7 @@
             app.fileName = msg.fileName;
             app.currentUser = msg.currentUser;
             document.getElementById("current-file-name").textContent = msg.fileName || "Untitled";
-            document.getElementById("current-file-key").textContent = msg.fileKey || "—";
+            setFileKeyDisplay(msg.fileKey || null);
             initialize();
             break;
 
@@ -766,6 +779,10 @@
               storageCallbacks[msg.key](msg.value);
               delete storageCallbacks[msg.key];
             }
+            break;
+
+          case "asset-keys":
+            handleAssetKeys(Array.isArray(msg.candidates) ? msg.candidates : []);
             break;
         }
       };
@@ -868,6 +885,147 @@
         if (btn) btn.textContent = app.configId ? "Save changes" : "Save & Activate";
       }
 
+      // ── Automatic file identification ──
+      //
+      // Figma withholds figma.fileKey from public Community plugins, so the
+      // sandbox collects the publish keys of this file's OWN styles/components
+      // ("collect-asset-keys" → "asset-keys") and the backend resolves one of
+      // them to the containing file's key via the Figma REST API.
+      let detectInFlight = false;
+      let detectTimer = null;
+
+      function setFileKeyDisplay(key) {
+        const el = document.getElementById("current-file-key");
+        if (!el) return;
+        if (key) {
+          el.textContent = key;
+          el.style.display = "";
+        } else {
+          el.textContent = "";
+          el.style.display = "none";
+        }
+      }
+
+      // Show a status line under the file card, with an optional action button
+      // ("retry" re-scans; "reconnect" re-runs Figma OAuth to pick up the
+      // library_assets:read scope, then re-scans).
+      function setDetectStatus(message, isWarn, action) {
+        const el = document.getElementById("file-detect-status");
+        const btn = document.getElementById("btn-file-retry");
+        if (!el || !btn) return;
+        if (message) {
+          el.textContent = message;
+          el.style.display = "block";
+          el.style.color = isWarn ? "#9a6700" : "";
+        } else {
+          el.textContent = "";
+          el.style.display = "none";
+        }
+        if (!action) {
+          btn.style.display = "none";
+        } else {
+          btn.style.display = "inline-flex";
+          btn.textContent = action === "reconnect" ? "Reconnect Figma" : "Refresh";
+          btn.onclick = action === "reconnect" ? reconnectFigmaForDetection : retryFileDetection;
+        }
+      }
+
+      function startFileDetection() {
+        if (app.fileKey || detectInFlight || !app.sessionToken) return;
+        detectInFlight = true;
+        setDetectStatus("Identifying this file…", false, null);
+        parent.postMessage({ pluginMessage: { type: "collect-asset-keys" } }, "*");
+        detectTimer = setTimeout(() => {
+          if (detectInFlight) {
+            detectInFlight = false;
+            setDetectStatus("Couldn't scan this file. Tap Refresh to try again.", true, "retry");
+          }
+        }, 20000);
+      }
+
+      function retryFileDetection() {
+        detectInFlight = false;
+        if (detectTimer) clearTimeout(detectTimer);
+        startFileDetection();
+      }
+
+      function reconnectFigmaForDetection() {
+        // Re-run the Figma OAuth so the token picks up the newly approved
+        // scope, then re-scan.
+        app.figmaConnected = false;
+        startFigmaAuto(() => retryFileDetection());
+      }
+
+      async function handleAssetKeys(candidates) {
+        if (!detectInFlight) return;
+        if (detectTimer) clearTimeout(detectTimer);
+
+        if (!candidates.length) {
+          detectInFlight = false;
+          setDetectStatus(
+            "This library hasn't been published yet. Publish it once (Assets → Publish library), then tap Refresh.",
+            true,
+            "retry",
+          );
+          return;
+        }
+
+        try {
+          const res = await api(`/api/figma/resolve-file`, {
+            method: "POST",
+            body: JSON.stringify({ candidates: candidates.slice(0, 10) }),
+          });
+          const data = await readJson(res);
+          detectInFlight = false;
+
+          if (res.ok && data.fileKey) {
+            app.fileKey = data.fileKey;
+            setFileKeyDisplay(data.fileKey);
+            setDetectStatus(null, false, null);
+            updateSetupState();
+            // A teammate may have set this file up already → shared view.
+            await lookupSharedConfig(data.fileKey);
+            return;
+          }
+          if (res.ok && !data.fileKey) {
+            setDetectStatus(
+              "This library hasn't been published yet. Publish it once (Assets → Publish library), then tap Refresh.",
+              true,
+              "retry",
+            );
+            return;
+          }
+          if (data.error === "figma_reauth_required") {
+            setDetectStatus(
+              "File detection needs Figma's updated permission. Reconnect Figma to grant it — if that fails, Figma is still reviewing the update; try again later.",
+              true,
+              "reconnect",
+            );
+            return;
+          }
+          setDetectStatus("Couldn't identify this file. Tap Refresh to try again.", true, "retry");
+        } catch (e) {
+          detectInFlight = false;
+          setDetectStatus(
+            "Network hiccup while identifying this file. Tap Refresh.",
+            true,
+            "retry",
+          );
+        }
+      }
+
+      async function lookupSharedConfig(fileKey) {
+        try {
+          const res = await api(`/api/config?fileKey=${encodeURIComponent(fileKey)}`);
+          if (res.ok) {
+            const data = await readJson(res);
+            if (data.config) showSharedConfig(data.config, data.isOwner === true);
+          }
+        } catch (e) {
+          // Best-effort; setup continues and Save surfaces real errors.
+        }
+      }
+
       // ── Setup state management ──
       function updateSetupState() {
         const slackNum = document.getElementById("step-slack-num");
@@ -891,10 +1049,16 @@
           slackBtn.disabled = !app.figmaConnected;
         }
 
-        // Step 3 — Select file — display-only, so it's satisfied as soon as it
-        // unlocks (Slack connected) and we have the current file key.
-        const fileReady = app.slackConnected && app.figmaConnected && !!app.fileKey;
-        fileNum.className = fileReady ? "step-num done" : "step-num pending";
+        // Step 3 — Select file — auto-satisfied once the file key is known
+        // (provided directly by Figma for private installs, or resolved from
+        // the file's published assets — see startFileDetection).
+        const connected = app.slackConnected && app.figmaConnected;
+        const fileReady = connected && !!app.fileKey;
+        fileNum.className = fileReady
+          ? "step-num done"
+          : connected
+            ? "step-num active"
+            : "step-num pending";
         fileNum.textContent = fileReady ? "✓" : "3";
 
         // Step 4 — Add channels — unlocks once the file step (step 3) is satisfied.
@@ -1097,6 +1261,9 @@
           "We'll watch your selected file and notify Slack when it's published.";
         document.getElementById("btn-figma-retry").style.display = "none";
         updateSetupState();
+        // With a session in hand, identify the file automatically (no-op when
+        // the sandbox already provided a key or a scan is in flight).
+        startFileDetection();
       }
 
       function figmaBannerError(message) {

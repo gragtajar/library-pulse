@@ -29,9 +29,10 @@
  * @typedef {{ type: "storage-result", key: string, value: unknown }} StorageResultMessage
  * @typedef {{ type: "storage-saved", key: string }} StorageSavedMessage
  * @typedef {{ type: "storage-deleted", key: string }} StorageDeletedMessage
+ * @typedef {{ type: "asset-keys", candidates: Array<{ key: string, type: "style" | "component" | "component_set" }> }} AssetKeysMessage
  * @typedef {{ type: "error", message: string }} PluginErrorMessage
  *
- * @typedef {InitMessage | StorageResultMessage | StorageSavedMessage | StorageDeletedMessage | PluginErrorMessage} PluginToUiMessage
+ * @typedef {InitMessage | StorageResultMessage | StorageSavedMessage | StorageDeletedMessage | AssetKeysMessage | PluginErrorMessage} PluginToUiMessage
  */
 
 /**
@@ -42,8 +43,9 @@
  * @typedef {{ type: "open-url", url: string }} OpenUrlMessage
  * @typedef {{ type: "notify", message: string, timeout?: number, error?: boolean }} NotifyMessage
  * @typedef {{ type: "resize", width?: number, height?: number }} ResizeMessage
+ * @typedef {{ type: "collect-asset-keys" }} CollectAssetKeysMessage
  *
- * @typedef {CloseMessage | GetStorageMessage | SetStorageMessage | DeleteStorageMessage | OpenUrlMessage | NotifyMessage | ResizeMessage} UiToPluginMessage
+ * @typedef {CloseMessage | GetStorageMessage | SetStorageMessage | DeleteStorageMessage | OpenUrlMessage | NotifyMessage | ResizeMessage | CollectAssetKeysMessage} UiToPluginMessage
  */
 
 export {}; // make this a module

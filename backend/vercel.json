@@ -15,6 +15,7 @@
     { "src": "/api/config", "dest": "/api/config.js" },
     { "src": "/api/slack/channels", "dest": "/api/slack/channels.js" },
     { "src": "/api/slack/mentions", "dest": "/api/slack/mentions.js" },
+    { "src": "/api/figma/resolve-file", "dest": "/api/figma/resolve-file.js" },
     { "src": "/api/webhook", "dest": "/api/webhook.js" },
     { "src": "/api/health", "dest": "/api/health.js" }
   ],
