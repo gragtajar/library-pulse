@@ -21,8 +21,18 @@
  * IMPORTANT: Figma's OAuth `scope` param is SPACE-delimited (OAuth2 spec). A
  * comma-joined value is parsed as a single invalid scope ("Invalid scopes for
  * app"), so this MUST stay space-separated.
+ *
+ * ⚠️ NEVER add a scope here before Figma has APPROVED it for the app — Figma
+ * rejects any authorize request containing an unapproved scope with
+ * 400 "Invalid scopes for app", which bricks ALL sign-ins (this happened live
+ * during the webhooks:read rollout). `library_assets:read` (file-key
+ * resolution via published assets, see api/figma/resolve-file.js) is pending
+ * review — append it here in a follow-up PR once approved.
  */
 export const FIGMA_OAUTH_SCOPES = "webhooks:write webhooks:read";
+
+/** Scope required by the published-asset → file-key resolver (pending review). */
+export const LIBRARY_ASSETS_SCOPE = "library_assets:read";
 
 /**
  * Does a stored (space-delimited) scope string grant `scope`?

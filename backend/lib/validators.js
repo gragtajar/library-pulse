@@ -75,6 +75,33 @@ export function assertUuid(v) {
   return v;
 }
 
+/** Figma published-asset keys (component/style publish keys — hex-ish strings). */
+const FIGMA_ASSET_KEY = /^[A-Za-z0-9_-]{8,128}$/;
+const ASSET_TYPES = new Set(["style", "component", "component_set"]);
+const ASSET_CANDIDATES_MAX = 10;
+
+/**
+ * Validate the published-asset candidates the plugin sandbox collected for
+ * file-key resolution: 1–10 entries of `{ key, type }`.
+ *
+ * @param {unknown} v
+ * @returns {Array<{ key: string, type: "style" | "component" | "component_set" }>}
+ */
+export function assertAssetCandidates(v) {
+  if (!Array.isArray(v) || v.length < 1 || v.length > ASSET_CANDIDATES_MAX) {
+    throw new ValidationError(`Provide between 1 and ${ASSET_CANDIDATES_MAX} asset candidates`);
+  }
+  return v.map((entry) => {
+    const key = typeof entry?.key === "string" ? entry.key : "";
+    const type = entry?.type;
+    if (!FIGMA_ASSET_KEY.test(key)) throw new ValidationError("Invalid Figma asset key");
+    if (typeof type !== "string" || !ASSET_TYPES.has(type)) {
+      throw new ValidationError("Invalid asset type");
+    }
+    return { key, type: /** @type {"style" | "component" | "component_set"} */ (type) };
+  });
+}
+
 /** Slack user IDs (`U…`/`W…`) and user-group IDs (`S…`). */
 const SLACK_USER_ID = /^[UW][A-Z0-9]{2,20}$/;
 const SLACK_USERGROUP_ID = /^S[A-Z0-9]{2,20}$/;

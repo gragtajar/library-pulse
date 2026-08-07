@@ -24,6 +24,7 @@ flowchart LR
         Status["/api/auth-status"]
         Config["/api/config"]
         SlackChannels["/api/slack/channels"]
+        ResolveFile["/api/figma/resolve-file"]
         Webhook["/api/webhook"]
         Health["/api/health"]
     end
@@ -36,7 +37,8 @@ flowchart LR
     SlackAPI["Slack API"]
     FigmaAPI["Figma API"]
 
-    UI -- fetch + Bearer session --> AuthSlack & AuthFigma & Status & Config & SlackChannels
+    UI -- fetch + Bearer session --> AuthSlack & AuthFigma & Status & Config & SlackChannels & ResolveFile
+    ResolveFile -- asset key → file_key --> FigmaAPI
     Plugin -- openExternal --> Browser
     Browser -- redirect --> AuthSlack
     Browser -- redirect --> AuthFigma

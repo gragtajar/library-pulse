@@ -25,6 +25,7 @@ const ALLOWED_UI_MESSAGE_TYPES = new Set([
   "open-url",
   "notify",
   "resize",
+  "collect-asset-keys",
 ]);
 
 // Same-namespace prefix for all clientStorage keys → easy to wipe.
@@ -129,9 +130,87 @@ figma.ui.onmessage = async (/** @type {any} */ msg) => {
         figma.ui.resize(w, h);
         return;
       }
+
+      case "collect-asset-keys": {
+        // Public plugins can't read figma.fileKey, but they CAN read the keys
+        // of this file's own components/styles — which the backend resolves to
+        // the file key via the Figma REST API (GET /v1/components/:key etc.).
+        const candidates = await collectAssetKeys();
+        figma.ui.postMessage({ type: "asset-keys", candidates });
+        return;
+      }
     }
   });
 };
+
+/**
+ * Gather publish keys of assets that belong to THIS file. Local styles first —
+ * they're document-level, so no page loading is needed even under
+ * `documentAccess: "dynamic-page"`. Only if styles are scarce do we walk pages
+ * for components/component sets. `remote === false` filters out assets that
+ * were imported from other libraries, and the cap bounds work on huge files.
+ *
+ * @returns {Promise<Array<{ key: string, type: "style" | "component" | "component_set" }>>}
+ */
+async function collectAssetKeys() {
+  const MAX_CANDIDATES = 10;
+  /** @type {Array<{ key: string, type: "style" | "component" | "component_set" }>} */
+  const out = [];
+  const seen = new Set();
+
+  /**
+   * @param {string} key
+   * @param {"style" | "component" | "component_set"} type
+   */
+  const push = (key, type) => {
+    if (
+      typeof key === "string" &&
+      key.length > 0 &&
+      !seen.has(key) &&
+      out.length < MAX_CANDIDATES
+    ) {
+      seen.add(key);
+      out.push({ key, type });
+    }
+  };
+
+  try {
+    const styleLists = await Promise.all([
+      figma.getLocalPaintStylesAsync(),
+      figma.getLocalTextStylesAsync(),
+      figma.getLocalEffectStylesAsync(),
+      figma.getLocalGridStylesAsync(),
+    ]);
+    for (const list of styleLists) {
+      for (const style of list) {
+        if (!style.remote) push(style.key, "style");
+      }
+    }
+  } catch {
+    // Styles unavailable — components below are the fallback.
+  }
+
+  // A few style keys are plenty; walk pages only when styles are scarce.
+  if (out.length < 3) {
+    for (const page of figma.root.children) {
+      if (out.length >= MAX_CANDIDATES) break;
+      try {
+        await page.loadAsync();
+        const nodes = page.findAllWithCriteria({ types: ["COMPONENT", "COMPONENT_SET"] });
+        for (const node of nodes) {
+          if (out.length >= MAX_CANDIDATES) break;
+          if (!node.remote) {
+            push(node.key, node.type === "COMPONENT_SET" ? "component_set" : "component");
+          }
+        }
+      } catch {
+        // Skip pages that fail to load; others may still yield keys.
+      }
+    }
+  }
+
+  return out;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
