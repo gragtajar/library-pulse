@@ -522,9 +522,28 @@
             <div class="file-option selected" id="file-display" style="cursor: default">
               <div class="file-info">
                 <div class="file-name" id="current-file-name">Loading…</div>
-                <div class="file-key" id="current-file-key">—</div>
+                <div class="file-key" id="current-file-key" style="display: none"></div>
               </div>
               <span class="badge badge-success" style="font-size: 10px">Current file</span>
+            </div>
+
+            <!-- Figma only exposes the file ID (figma.fileKey) to PRIVATE plugins;
+                 public Community plugins always get undefined. When that happens
+                 the user pastes the file's link once so we can read the ID. -->
+            <div id="file-link-wrap" style="display: none; margin-top: 8px">
+              <div class="input-group" style="margin-bottom: 0">
+                <label for="input-file-link">File link</label>
+                <input
+                  type="text"
+                  id="input-file-link"
+                  placeholder="Paste this file's link (⌘L / Ctrl+L, then copy the URL)"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="hint" style="margin-top: 4px">
+                Figma doesn't share file IDs with Community plugins, so paste this file's link once
+                to confirm it. Copy it from the browser address bar or Share → Copy link.
+              </div>
             </div>
           </div>
         </div>
@@ -757,7 +776,7 @@
             app.fileName = msg.fileName;
             app.currentUser = msg.currentUser;
             document.getElementById("current-file-name").textContent = msg.fileName || "Untitled";
-            document.getElementById("current-file-key").textContent = msg.fileKey || "—";
+            setFileKeyDisplay(msg.fileKey || null);
             initialize();
             break;
 
@@ -868,6 +887,59 @@
         if (btn) btn.textContent = app.configId ? "Save changes" : "Save & Activate";
       }
 
+      // ── File identity ──
+      // Shows the file key under the name only when we actually have one —
+      // never a placeholder dash.
+      function setFileKeyDisplay(key) {
+        const el = document.getElementById("current-file-key");
+        if (!el) return;
+        if (key) {
+          el.textContent = key;
+          el.style.display = "";
+        } else {
+          el.textContent = "";
+          el.style.display = "none";
+        }
+      }
+
+      // Extract the file key from a pasted Figma URL (figma.com/file/KEY/… or
+      // figma.com/design/KEY/…) or a raw key. Mirrors the backend's
+      // FIGMA_FILE_KEY pattern; returns null when nothing valid is found.
+      function parseFileKey(input) {
+        const trimmed = (input || "").trim();
+        const urlMatch = trimmed.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)/);
+        const key = urlMatch ? urlMatch[1] : trimmed;
+        return /^[A-Za-z0-9]{8,40}$/.test(key) ? key : null;
+      }
+
+      // Called as the user pastes/types the file link. On a valid key: unlock
+      // step 4, and check whether this file already has a shared config (a
+      // second editor should land on the shared view, not a blank setup).
+      async function onFileLinkInput() {
+        const input = document.getElementById("input-file-link");
+        if (!input) return;
+        const key = parseFileKey(input.value);
+        if (!key || key === app.fileKey) return;
+        app.fileKey = key;
+        setFileKeyDisplay(key);
+        updateSetupState();
+
+        if (app.sessionToken) {
+          try {
+            const res = await api(`/api/config?fileKey=${encodeURIComponent(key)}`);
+            if (res.ok) {
+              const data = await readJson(res);
+              if (data.config) {
+                showSharedConfig(data.config, data.isOwner === true);
+                return;
+              }
+            }
+          } catch (e) {
+            // Lookup is best-effort; saving will surface real errors.
+          }
+        }
+      }
+
       // ── Setup state management ──
       function updateSetupState() {
         const slackNum = document.getElementById("step-slack-num");
@@ -891,11 +963,21 @@
           slackBtn.disabled = !app.figmaConnected;
         }
 
-        // Step 3 — Select file — display-only, so it's satisfied as soon as it
-        // unlocks (Slack connected) and we have the current file key.
-        const fileReady = app.slackConnected && app.figmaConnected && !!app.fileKey;
-        fileNum.className = fileReady ? "step-num done" : "step-num pending";
+        // Step 3 — Select file. Satisfied once we have the file's key. Figma
+        // only exposes figma.fileKey to PRIVATE plugins, so on Community
+        // installs the key is missing and we ask for the file's link instead —
+        // without this, step 4 could never unlock (the "everything is
+        // disabled" bug).
+        const connected = app.slackConnected && app.figmaConnected;
+        const fileReady = connected && !!app.fileKey;
+        fileNum.className = fileReady
+          ? "step-num done"
+          : connected
+            ? "step-num active"
+            : "step-num pending";
         fileNum.textContent = fileReady ? "✓" : "3";
+        const linkWrap = document.getElementById("file-link-wrap");
+        if (linkWrap) linkWrap.style.display = connected && !app.fileKey ? "block" : "none";
 
         // Step 4 — Add channels — unlocks once the file step (step 3) is satisfied.
         if (fileReady) {
@@ -1483,6 +1565,12 @@
           search.addEventListener("focus", openDropdown);
           search.addEventListener("input", renderDropdown);
           search.addEventListener("blur", () => setTimeout(closeDropdown, 150));
+        }
+
+        const fileLink = document.getElementById("input-file-link");
+        if (fileLink) {
+          fileLink.addEventListener("input", onFileLinkInput);
+          fileLink.addEventListener("change", onFileLinkInput);
         }
 
         const ta = document.getElementById("custom-message");
