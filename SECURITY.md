@@ -32,9 +32,10 @@ rather stay anonymous.
 - **From the Figma plugin API** it reads only the current file's key and name and the
   current user's id and display name — used to label configurations and to bind a
   webhook to the file.
-- **Slack scopes:** `chat:write`, `chat:write.public`, `channels:read`, `groups:read`
-  — used to post notifications to the channels the user chooses and to list a
-  workspace's channels for the picker.
+- **Slack scopes:** `chat:write`, `chat:write.public`, `channels:read`, `groups:read`,
+  `users:read`, `usergroups:read` — used to post notifications to the channels the
+  user chooses, to list a workspace's channels for the picker, and to list member /
+  user-group names for the custom-note mention picker. Message content is never read.
 
 ## Org-shared, per-file access control
 
