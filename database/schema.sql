@@ -118,7 +118,21 @@ CREATE TABLE notification_log (
 CREATE INDEX idx_log_event_dedupe ON notification_log(event_key, configuration_id, slack_channel_id);
 
 -- ────────────────────────────────────────────────
--- 7. Webhook idempotency — dedupe Figma's retries
+-- 7. Per-workspace Slack directory cache (channel + mention pickers)
+-- ────────────────────────────────────────────────
+-- Short-TTL cache of the pickers' final response payloads, so large
+-- workspaces don't re-page conversations.list / users.list on every open.
+CREATE TABLE slack_directory_cache (
+  slack_team_id  TEXT NOT NULL REFERENCES slack_installations(slack_team_id) ON DELETE CASCADE,
+  kind           TEXT NOT NULL CHECK (kind IN ('channels', 'mentions')),
+  payload        JSONB NOT NULL,
+  truncated      BOOLEAN NOT NULL DEFAULT FALSE,
+  fetched_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (slack_team_id, kind)
+);
+
+-- ────────────────────────────────────────────────
+-- 8. Webhook idempotency — dedupe Figma's retries
 -- ────────────────────────────────────────────────
 CREATE TABLE webhook_events (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -164,6 +178,7 @@ ALTER TABLE configurations      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth_sessions       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notification_log    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE webhook_events      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE slack_directory_cache ENABLE ROW LEVEL SECURITY;
 
 -- The backend connects with the service_role key → full access.
 CREATE POLICY srv_all ON slack_installations FOR ALL USING (TRUE) WITH CHECK (TRUE);
@@ -173,6 +188,7 @@ CREATE POLICY srv_all ON configurations      FOR ALL USING (TRUE) WITH CHECK (TR
 CREATE POLICY srv_all ON auth_sessions       FOR ALL USING (TRUE) WITH CHECK (TRUE);
 CREATE POLICY srv_all ON notification_log    FOR ALL USING (TRUE) WITH CHECK (TRUE);
 CREATE POLICY srv_all ON webhook_events      FOR ALL USING (TRUE) WITH CHECK (TRUE);
+CREATE POLICY srv_all ON slack_directory_cache FOR ALL USING (TRUE) WITH CHECK (TRUE);
 
 -- ────────────────────────────────────────────────
 -- Cron jobs (Supabase pg_cron). Uncomment after extension is enabled.

@@ -568,7 +568,7 @@
                 </div>
                 <div class="channel-dropdown" id="channel-dropdown" style="display: none"></div>
               </div>
-              <div class="hint" style="margin-top: 4px">
+              <div class="hint" id="channels-hint" style="margin-top: 4px">
                 Pick up to 3 channels. Private channels appear only if the Library Pulse bot has
                 been added to them.
               </div>
@@ -735,6 +735,8 @@
         mentionDirLoading: false,
         mentionDirError: null,
         mentionDirForKey: null,
+        mentionDirTruncated: false,
+        channelsTruncated: false,
       };
 
       // ── Figma plugin message bus ──
@@ -1376,7 +1378,9 @@
           const data = await readJson(res);
           if (!res.ok) throw new Error(friendlyError(data.error) || "Couldn't load channels");
           app.allChannels = Array.isArray(data.channels) ? data.channels : [];
+          app.channelsTruncated = data.truncated === true;
           app.channelsLoaded = true;
+          updateChannelsHint();
         } catch (e) {
           app.channelsError = e && e.message ? e.message : "Couldn't load channels";
         } finally {
@@ -1513,6 +1517,7 @@
             users: Array.isArray(data.users) ? data.users : [],
             usergroups: Array.isArray(data.usergroups) ? data.usergroups : [],
           };
+          app.mentionDirTruncated = data.truncated === true;
         } catch (e) {
           app.mentionDir = null;
           app.mentionDirError = e && e.message ? e.message : "mentions_load_failed";
@@ -1530,9 +1535,29 @@
           hint.textContent =
             "@mentions are unavailable until Slack is reconnected (new permissions). The note itself still works.";
           hint.style.color = "#9a6700";
+        } else if (app.mentionDirTruncated) {
+          hint.textContent =
+            "Large workspace — the people list may be incomplete. Type a name to search what's loaded.";
+          hint.style.color = "#9a6700";
         } else {
           hint.textContent = "Shared with everyone on this file — any editor can change it later.";
           hint.style.color = "";
+        }
+      }
+
+      // Channel-picker hint: normally static help text; flips to a warning when
+      // the backend reports the workspace list was truncated.
+      function updateChannelsHint() {
+        const el = document.getElementById("channels-hint");
+        if (!el) return;
+        if (app.channelsTruncated) {
+          el.textContent =
+            "Large workspace — the channel list may be incomplete. Type a name to search what's loaded.";
+          el.style.color = "#9a6700";
+        } else {
+          el.textContent =
+            "Pick up to 3 channels. Private channels appear only if the Library Pulse bot has been added to them.";
+          el.style.color = "";
         }
       }
 
@@ -1558,9 +1583,21 @@
             (g) => !q || g.handle.toLowerCase().includes(q) || g.name.toLowerCase().includes(q),
           )
           .map((g) => ({ id: g.id, type: "usergroup", label: g.handle, display: g.name }));
+        // Match the DISPLAY name or the REAL name — someone whose display name
+        // is "PJ" must still be findable by typing "Piyush Jain".
         const users = app.mentionDir.users
-          .filter((u) => !q || u.name.toLowerCase().includes(q))
-          .map((u) => ({ id: u.id, type: "user", label: u.name, display: u.name }));
+          .filter(
+            (u) =>
+              !q ||
+              u.name.toLowerCase().includes(q) ||
+              (u.real_name || "").toLowerCase().includes(q),
+          )
+          .map((u) => ({
+            id: u.id,
+            type: "user",
+            label: u.name,
+            display: u.real_name ? `${u.name} — ${u.real_name}` : u.name,
+          }));
         return groups.concat(users).slice(0, 8);
       }
 
