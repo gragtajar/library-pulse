@@ -6,28 +6,30 @@
  *   ?slackTeamId=Y → use that workspace directly (first-time setup, right after
  *                    the Slack OAuth completes, before any config exists).
  *
- * Returns `{ channels: [{ id, name, is_private, num_members }] }` sorted by
- * `num_members` desc. Only public channels + private channels the bot is a
- * member of are returned (a Slack limitation) — which is correct, since the bot
- * can only post to those anyway.
+ * Returns `{ channels: [{ id, name, is_private, num_members }], truncated? }`
+ * sorted by `num_members` desc. Only public channels + private channels the
+ * bot is a member of appear (a Slack limitation) — correct, since the bot can
+ * only post to those.
+ *
+ * Large-workspace behavior: pages up to ~9.6k channels within a wall-clock
+ * deadline (lib/slack-directory.js); if a limit is hit the partial list is
+ * served with `truncated: true` so the UI can say so. Results are cached per
+ * workspace for a short TTL (migration 005) to respect Slack's Tier-2 rate
+ * limits when several editors open the picker.
  *
  * Auth: `requireSession`. For `?fileKey`, the file's config setter is trusted;
  * any other caller is access-checked (lib/figma-access.js), matching /api/config.
- *
- * No caching: Vercel functions are ephemeral, so we fetch on demand.
- * `conversations.list` is Slack Tier 2 (~20 req/min/workspace); one picker load
- * is at most MAX_PAGES calls.
  */
 
-import { applyCors, fetchWithTimeout, withErrorHandling } from "../../lib/http.js";
-import { logger } from "../../lib/logger.js";
+import { applyCors, withErrorHandling } from "../../lib/http.js";
 import { requireSession } from "../../lib/session.js";
-import { UpstreamError, ValidationError } from "../../lib/errors.js";
 import { normalizeChannels } from "../../lib/slack-channels.js";
 import { resolveWorkspaceToken } from "../../lib/slack-workspace.js";
-
-const PAGE_LIMIT = 200;
-const MAX_PAGES = 5; // up to 1000 channels
+import {
+  pageSlackList,
+  readDirectoryCache,
+  writeDirectoryCache,
+} from "../../lib/slack-directory.js";
 
 export default withErrorHandling(
   /**
@@ -39,58 +41,31 @@ export default withErrorHandling(
     if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
     const callerId = requireSession(req);
-    const { botToken } = await resolveWorkspaceToken(
+    const { teamId, botToken } = await resolveWorkspaceToken(
       callerId,
       single(req.query.fileKey),
       single(req.query.slackTeamId),
     );
 
-    const channels = await listAllChannels(botToken);
-    return res.status(200).json({ channels });
-  },
-);
-
-/**
- * Page through conversations.list and collect public + accessible private
- * channels.
- *
- * @param {string} botToken
- * @returns {Promise<Array<{id: string, name: string, is_private: boolean, num_members: number}>>}
- */
-async function listAllChannels(botToken) {
-  /** @type {any[]} */
-  const raw = [];
-  let cursor = "";
-
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const url = new URL("https://slack.com/api/conversations.list");
-    url.searchParams.set("types", "public_channel,private_channel");
-    url.searchParams.set("exclude_archived", "true");
-    url.searchParams.set("limit", String(PAGE_LIMIT));
-    if (cursor) url.searchParams.set("cursor", cursor);
-
-    const r = await fetchWithTimeout(url, {
-      headers: { Authorization: `Bearer ${botToken}` },
-      timeoutMs: 8_000,
-    });
-    /** @type {any} */
-    const data = await r.json();
-
-    if (!data.ok) {
-      logger.warn("slack_conversations_list_failed", { error: data.error });
-      if (["token_revoked", "invalid_auth", "account_inactive"].includes(data.error)) {
-        throw new ValidationError("slack_reauth_required");
-      }
-      throw new UpstreamError(`slack_error:${String(data.error).slice(0, 60)}`);
+    const cached = await readDirectoryCache(teamId, "channels");
+    if (cached) {
+      return res
+        .status(200)
+        .json({ channels: cached.payload, ...(cached.truncated ? { truncated: true } : {}) });
     }
 
-    if (Array.isArray(data.channels)) raw.push(...data.channels);
+    const { records, truncated } = await pageSlackList(
+      botToken,
+      "conversations.list",
+      { types: "public_channel,private_channel", exclude_archived: "true" },
+      "channels",
+    );
+    const channels = normalizeChannels(records);
 
-    cursor = data.response_metadata?.next_cursor || "";
-    if (!cursor) break;
-  }
-  return normalizeChannels(raw);
-}
+    await writeDirectoryCache(teamId, "channels", channels, truncated);
+    return res.status(200).json({ channels, ...(truncated ? { truncated: true } : {}) });
+  },
+);
 
 /** @param {string | string[] | undefined} v */
 function single(v) {

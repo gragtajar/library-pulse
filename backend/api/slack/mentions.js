@@ -7,8 +7,17 @@
  *                    access-checked — via lib/slack-workspace.js).
  *   ?slackTeamId=Y → that workspace directly (first-time setup).
  *
- * Returns `{ users: [{id, name}], usergroups: [{id, handle, name}],
- * usergroupsUnavailable?: true }`, alphabetically sorted.
+ * Returns `{ users: [{id, name, real_name}], usergroups: [{id, handle, name}],
+ * usergroupsUnavailable?: true, truncated?: true }`, alphabetically sorted.
+ * `real_name` is included (empty when identical to the display name) so the
+ * picker can match a query against either — a person whose display name is
+ * "PJ" must still be findable by typing "Piyush Jain".
+ *
+ * Large-workspace behavior: users.list includes deactivated accounts and bots
+ * in its raw pages, so the pager's ~9.6k-record ceiling counts raw entries;
+ * humans are filtered afterwards (lib/slack-directory.js normalizeMembers).
+ * Partial results are served with `truncated: true`, and the final payload is
+ * cached per workspace for a short TTL (migration 005).
  *
  * Scopes: `users:read` (users.list) and `usergroups:read` (usergroups.list).
  * Workspaces that installed before these scopes were added get Slack's
@@ -22,15 +31,13 @@ import { logger } from "../../lib/logger.js";
 import { requireSession } from "../../lib/session.js";
 import { UpstreamError, ValidationError } from "../../lib/errors.js";
 import { resolveWorkspaceToken } from "../../lib/slack-workspace.js";
-
-const PAGE_LIMIT = 200;
-const MAX_PAGES = 5; // up to 1000 members
-const SLACK_AUTH_ERRORS = new Set([
-  "token_revoked",
-  "invalid_auth",
-  "account_inactive",
-  "missing_scope",
-]);
+import {
+  SLACK_AUTH_ERRORS,
+  normalizeMembers,
+  pageSlackList,
+  readDirectoryCache,
+  writeDirectoryCache,
+} from "../../lib/slack-directory.js";
 
 export default withErrorHandling(
   /**
@@ -42,61 +49,32 @@ export default withErrorHandling(
     if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
     const callerId = requireSession(req);
-    const { botToken } = await resolveWorkspaceToken(
+    const { teamId, botToken } = await resolveWorkspaceToken(
       callerId,
       single(req.query.fileKey),
       single(req.query.slackTeamId),
     );
 
-    const users = await listUsers(botToken);
+    const cached = await readDirectoryCache(teamId, "mentions");
+    if (cached) {
+      return res
+        .status(200)
+        .json({ ...cached.payload, ...(cached.truncated ? { truncated: true } : {}) });
+    }
+
+    const { records, truncated } = await pageSlackList(botToken, "users.list", {}, "members");
+    const users = normalizeMembers(records);
     const { usergroups, unavailable } = await listUsergroups(botToken);
 
-    return res.status(200).json({
+    const payload = {
       users,
       usergroups,
       ...(unavailable ? { usergroupsUnavailable: true } : {}),
-    });
+    };
+    await writeDirectoryCache(teamId, "mentions", payload, truncated);
+    return res.status(200).json({ ...payload, ...(truncated ? { truncated: true } : {}) });
   },
 );
-
-/**
- * Page through users.list, keeping only human, active members.
- *
- * @param {string} botToken
- * @returns {Promise<Array<{ id: string, name: string }>>}
- */
-async function listUsers(botToken) {
-  /** @type {Array<{ id: string, name: string }>} */
-  const out = [];
-  let cursor = "";
-
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const url = new URL("https://slack.com/api/users.list");
-    url.searchParams.set("limit", String(PAGE_LIMIT));
-    if (cursor) url.searchParams.set("cursor", cursor);
-
-    const r = await fetchWithTimeout(url, {
-      headers: { Authorization: `Bearer ${botToken}` },
-      timeoutMs: 8_000,
-    });
-    /** @type {any} */
-    const data = await r.json();
-    if (!data.ok) throw slackError("users_list", data.error);
-
-    for (const m of data.members ?? []) {
-      if (!m || typeof m.id !== "string") continue;
-      if (m.deleted || m.is_bot || m.id === "USLACKBOT") continue;
-      const name = m.profile?.display_name || m.profile?.real_name || m.real_name || m.name;
-      if (typeof name === "string" && name) out.push({ id: m.id, name });
-    }
-
-    cursor = data.response_metadata?.next_cursor || "";
-    if (!cursor) break;
-  }
-
-  out.sort((a, b) => a.name.localeCompare(b.name));
-  return out;
-}
 
 /**
  * List user groups. Paid-plan-only feature: `plan_upgrade_required` degrades
@@ -117,7 +95,11 @@ async function listUsergroups(botToken) {
     if (data.error === "plan_upgrade_required") {
       return { usergroups: [], unavailable: true };
     }
-    throw slackError("usergroups_list", data.error);
+    logger.warn("slack_usergroups_list_failed", { error: data.error });
+    if (typeof data.error === "string" && SLACK_AUTH_ERRORS.has(data.error)) {
+      throw new ValidationError("slack_reauth_required");
+    }
+    throw new UpstreamError(`slack_error:${String(data.error).slice(0, 60)}`);
   }
 
   /** @type {Array<{ id: string, handle: string, name: string }>} */
@@ -128,21 +110,6 @@ async function listUsergroups(botToken) {
   }
   out.sort((a, b) => a.handle.localeCompare(b.handle));
   return { usergroups: out, unavailable: false };
-}
-
-/**
- * @param {string} where
- * @param {unknown} code
- * @returns {Error}
- */
-function slackError(where, code) {
-  logger.warn(`slack_${where}_failed`, { error: code });
-  if (typeof code === "string" && SLACK_AUTH_ERRORS.has(code)) {
-    // Includes missing_scope: installs that predate users:read/usergroups:read
-    // must reconnect Slack to grant them.
-    return new ValidationError("slack_reauth_required");
-  }
-  return new UpstreamError(`slack_error:${String(code).slice(0, 60)}`);
 }
 
 /** @param {string | string[] | undefined} v */
