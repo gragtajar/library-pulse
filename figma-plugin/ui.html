@@ -601,6 +601,14 @@
                 <div class="hint" id="mention-hint" style="margin-top: 4px">
                   Shared with everyone on this file — any editor can change it later.
                 </div>
+                <button
+                  class="btn btn-secondary btn-sm"
+                  id="btn-mention-reconnect"
+                  onclick="reconnectSlackForMentions()"
+                  style="display: none; margin-top: 6px"
+                >
+                  Reconnect Slack
+                </button>
               </div>
             </div>
           </div>
@@ -1530,19 +1538,40 @@
 
       function updateMentionHint() {
         const hint = document.getElementById("mention-hint");
+        const reconnectBtn = document.getElementById("btn-mention-reconnect");
         if (!hint) return;
         if (app.mentionDirError === "slack_reauth_required") {
           hint.textContent =
-            "@mentions are unavailable until Slack is reconnected (new permissions). The note itself still works.";
+            "@mentions need Slack's updated permissions. Reconnect Slack to enable them — the note itself still works.";
           hint.style.color = "#9a6700";
+          if (reconnectBtn) reconnectBtn.style.display = "inline-flex";
         } else if (app.mentionDirTruncated) {
           hint.textContent =
             "Large workspace — the people list may be incomplete. Type a name to search what's loaded.";
           hint.style.color = "#9a6700";
+          if (reconnectBtn) reconnectBtn.style.display = "none";
         } else {
           hint.textContent = "Shared with everyone on this file — any editor can change it later.";
           hint.style.color = "";
+          if (reconnectBtn) reconnectBtn.style.display = "none";
         }
+      }
+
+      // Re-run the Slack OAuth so the bot token picks up newly requested
+      // scopes (users:read / usergroups:read), then reload the mention
+      // directory. This is the only affordance to re-auth Slack while it is
+      // already "connected" — the step-2 button is disabled in that state.
+      function reconnectSlackForMentions() {
+        notify("Reconnecting Slack — check your browser.");
+        connectSlack(() => {
+          updateSetupState();
+          app.mentionDir = null;
+          app.mentionDirForKey = null;
+          app.mentionDirError = null;
+          app.mentionDirTruncated = false;
+          updateMentionHint();
+          loadMentionDir();
+        });
       }
 
       // Channel-picker hint: normally static help text; flips to a warning when
