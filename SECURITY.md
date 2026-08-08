@@ -24,11 +24,14 @@ rather stay anonymous.
 
 ## What the plugin can access
 
-- **Figma scopes:** the plugin requests `webhooks:write` and `webhooks:read`.
-  `webhooks:write` registers and deletes a `LIBRARY_PUBLISH` webhook on the file the
-  user selects; `webhooks:read` lists a file's webhooks so the backend can confirm a
-  caller can access that file before returning or changing its shared config. The
-  plugin **never reads file contents, designs, or layers.**
+- **Figma scopes:** the plugin requests `webhooks:write`, `webhooks:read`, and
+  `library_assets:read`. `webhooks:write` registers and deletes a `LIBRARY_PUBLISH`
+  webhook on the file the user selects; `webhooks:read` lists a file's webhooks so
+  the backend can confirm a caller can access that file before returning or changing
+  its shared config; `library_assets:read` resolves one of the open file's published
+  component/style keys to the file's id (Figma doesn't expose file ids to public
+  Community plugins), reading only published-asset metadata. The plugin **never
+  reads file contents, designs, or layers.**
 - **From the Figma plugin API** it reads only the current file's key and name and the
   current user's id and display name — used to label configurations and to bind a
   webhook to the file.
