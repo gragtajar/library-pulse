@@ -12,8 +12,7 @@ import { applyCors, withErrorHandling } from "../../lib/http.js";
 import { logger } from "../../lib/logger.js";
 import { assertFigmaUserId, assertUuid } from "../../lib/validators.js";
 import { ValidationError } from "../../lib/errors.js";
-
-const SCOPES = ["chat:write", "chat:write.public", "channels:read", "groups:read"].join(",");
+import { SLACK_OAUTH_SCOPE_PARAM } from "../../lib/slack-oauth.js";
 
 export default withErrorHandling(
   /**
@@ -52,7 +51,7 @@ export default withErrorHandling(
     const redirectUri = `${envOrThrow("PUBLIC_URL")}/api/auth/slack-callback`;
     const url = new URL("https://slack.com/oauth/v2/authorize");
     url.searchParams.set("client_id", envOrThrow("SLACK_CLIENT_ID"));
-    url.searchParams.set("scope", SCOPES);
+    url.searchParams.set("scope", SLACK_OAUTH_SCOPE_PARAM);
     url.searchParams.set("redirect_uri", redirectUri);
     url.searchParams.set("state", state);
 

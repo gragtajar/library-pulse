@@ -83,6 +83,11 @@ Before setting up Library Pulse, you'll need accounts/apps on these services:
    - `chat:write.public`
    - `channels:read`
    - `groups:read`
+   - `users:read`
+   - `usergroups:read`
+
+   (Keep this list in sync with `backend/lib/slack-oauth.js` — the scopes the backend actually requests during OAuth.)
+
 4. Under **OAuth & Permissions → Redirect URLs**, add:
    ```
    https://YOUR-VERCEL-DOMAIN/api/auth/slack-callback
