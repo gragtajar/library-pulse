@@ -160,10 +160,12 @@ export function assertMentionList(v) {
 
 /**
  * Validate an array of 1–3 Slack channels. Accepts string IDs or
- * `{ id, name? }` objects.
+ * `{ id, name?, is_private? }` objects. `is_private` is persisted so the
+ * plugin can mark private channels on its chips; when present it must be a
+ * real boolean. Clients that omit it (older plugin builds) are unaffected.
  *
  * @param {unknown} v
- * @returns {Array<{ id: string, name?: string }>}
+ * @returns {Array<{ id: string, name?: string, is_private?: boolean }>}
  */
 export function assertChannelList(v) {
   if (!Array.isArray(v) || v.length < 1 || v.length > 3) {
@@ -172,9 +174,18 @@ export function assertChannelList(v) {
   return v.map((entry) => {
     const id = typeof entry === "string" ? entry : entry?.id;
     assertSlackChannelId(id);
-    const name =
-      typeof entry === "object" && entry && typeof entry.name === "string" ? entry.name : undefined;
-    return name ? { id, name } : { id };
+    /** @type {{ id: string, name?: string, is_private?: boolean }} */
+    const channel = { id };
+    if (typeof entry === "object" && entry) {
+      if (typeof entry.name === "string" && entry.name) channel.name = entry.name;
+      if (entry.is_private !== undefined) {
+        if (typeof entry.is_private !== "boolean") {
+          throw new ValidationError("Channel is_private must be true or false");
+        }
+        channel.is_private = entry.is_private;
+      }
+    }
+    return channel;
   });
 }
 
