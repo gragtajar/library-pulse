@@ -73,5 +73,34 @@ describe("validators", () => {
       expect(() => assertChannelList(["a", "b", "c", "d"])).toThrow(ValidationError);
       expect(() => assertChannelList(["xss-payload"])).toThrow(ValidationError);
     });
+    it("persists a boolean privacy flag (chip locks survive a reload)", () => {
+      expect(
+        assertChannelList([
+          { id: "C0123456", name: "#design", is_private: false },
+          { id: "C0ABCDEF", name: "design-ops", is_private: true },
+        ]),
+      ).toEqual([
+        { id: "C0123456", name: "#design", is_private: false },
+        { id: "C0ABCDEF", name: "design-ops", is_private: true },
+      ]);
+    });
+    it("keeps the legacy shape when the flag is absent (older plugin builds)", () => {
+      expect(assertChannelList([{ id: "C0123456", name: "#design" }])).toEqual([
+        { id: "C0123456", name: "#design" },
+      ]);
+      expect(assertChannelList(["C0123456"])).toEqual([{ id: "C0123456" }]);
+    });
+    it("rejects a non-boolean privacy flag", () => {
+      for (const bad of ["true", 1, 0, null, {}]) {
+        expect(() => assertChannelList([{ id: "C0123456", is_private: bad }])).toThrow(
+          ValidationError,
+        );
+      }
+    });
+    it("never copies unknown fields through to storage", () => {
+      expect(
+        assertChannelList([{ id: "C0123456", name: "#design", is_private: true, extra: "x" }]),
+      ).toEqual([{ id: "C0123456", name: "#design", is_private: true }]);
+    });
   });
 });
