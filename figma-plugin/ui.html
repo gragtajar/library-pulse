@@ -82,7 +82,7 @@
       }
       .subtitle {
         font-size: 11px;
-        color: var(--figma-color-text-secondary, #999);
+        color: var(--figma-color-text-secondary, #666);
         margin-bottom: 20px;
       }
 
@@ -117,7 +117,9 @@
         font-size: 11px;
         font-weight: 500;
         padding: 3px 8px;
-        border-radius: 10px;
+        /* Pill family (badges + chips) shares one radius; controls are 6px,
+           cards 8px. */
+        border-radius: 999px;
       }
       .badge-success {
         background: var(--lp-success-bg);
@@ -170,7 +172,9 @@
         color: var(--figma-color-text-disabled, #8c8c8c);
       }
       .btn-primary:hover:not(:disabled) {
-        opacity: 0.9;
+        /* Darken-on-hover, matching the secondary button's grammar (a
+           translucent overlay keeps the label crisp, unlike opacity). */
+        background-image: linear-gradient(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08));
       }
       .btn-secondary {
         background: var(--figma-color-bg-secondary, #f5f5f5);
@@ -178,7 +182,7 @@
         color: var(--figma-color-text, #333);
       }
       .btn-secondary:hover:not(:disabled) {
-        background: var(--figma-color-bg-hover, #eee);
+        background: var(--figma-color-bg-hover, #f0f0f0);
       }
       .btn-danger {
         background: transparent;
@@ -187,6 +191,29 @@
       }
       .btn-danger:hover:not(:disabled) {
         background: var(--lp-danger-bg);
+      }
+      /* Destructive-but-rare actions render as a quiet centered text link,
+         not a full-width alarm bar competing with routine buttons. */
+      .btn-link-danger {
+        background: transparent;
+        border: none;
+        color: var(--lp-danger);
+        width: fit-content;
+        padding: 6px 10px;
+        font-size: 11px;
+        margin: 8px auto 0;
+      }
+      .btn-link-danger:hover:not(:disabled) {
+        background: var(--lp-danger-bg);
+        border-radius: 6px;
+      }
+      /* Two-click confirm, armed: the button escalates to a danger fill so
+         the second (destructive) click is knowingly placed. */
+      .btn.btn-armed {
+        background: var(--lp-danger);
+        border-color: var(--lp-danger);
+        color: #fff;
+        border-radius: 6px;
       }
       .btn-sm {
         padding: 5px 10px;
@@ -209,7 +236,7 @@
         display: block;
         font-size: 11px;
         font-weight: 500;
-        color: var(--figma-color-text-secondary, #999);
+        color: var(--figma-color-text-secondary, #666);
         margin-bottom: 4px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
@@ -218,7 +245,9 @@
         width: 100%;
         padding: 8px 10px;
         font-size: 12px;
-        border: 1px solid var(--figma-color-border, #e5e5e5);
+        /* Interactive boundaries get a 3:1-capable fallback; decorative
+           dividers keep the lighter one. */
+        border: 1px solid var(--figma-color-border, #c9c9c9);
         border-radius: 6px;
         background: var(--figma-color-bg, #fff);
         color: var(--figma-color-text, #333);
@@ -228,9 +257,12 @@
         border-color: var(--figma-color-bg-brand, #0d99ff);
         box-shadow: 0 0 0 1px var(--figma-color-bg-brand, #0d99ff);
       }
-      .input-group .hint {
-        font-size: 10px;
-        color: var(--figma-color-text-tertiary, #b3b3b3);
+      /* One hint style everywhere: same role, same voice. (Previously this
+         was scoped to .input-group, so unscoped hints silently rendered as
+         12px body text while scoped ones were 10px tertiary.) */
+      .hint {
+        font-size: 11px;
+        color: var(--figma-color-text-secondary, #666);
         margin-top: 3px;
       }
 
@@ -248,14 +280,17 @@
         padding: 4px 8px;
         background: var(--figma-color-bg-secondary, #f5f5f5);
         border: 1px solid var(--figma-color-border, #e5e5e5);
-        border-radius: 12px;
+        border-radius: 999px;
         font-size: 11px;
       }
       .channel-pill .remove {
         cursor: pointer;
-        color: var(--figma-color-text-tertiary, #b3b3b3);
+        color: var(--figma-color-text-secondary, #666);
         font-size: 13px;
         line-height: 1;
+        /* Grow the hit area to ~24px without moving the visual layout. */
+        padding: 6px 8px;
+        margin: -6px -8px;
       }
       .channel-pill .remove:hover {
         color: var(--lp-danger);
@@ -291,13 +326,13 @@
         font-size: 12px;
       }
       .channel-option:hover {
-        background: var(--figma-color-bg-hover, #f5f5f5);
+        background: var(--figma-color-bg-hover, #f0f0f0);
       }
       .channel-option .ch-icon {
         width: 14px;
         flex-shrink: 0;
         text-align: center;
-        color: var(--figma-color-text-tertiary, #b3b3b3);
+        color: var(--figma-color-text-secondary, #767676);
       }
       .channel-option .ch-name {
         flex: 1;
@@ -308,14 +343,14 @@
       }
       .channel-option .ch-count {
         flex-shrink: 0;
-        font-size: 10px;
-        color: var(--figma-color-text-tertiary, #b3b3b3);
+        font-size: 11px;
+        color: var(--figma-color-text-secondary, #767676);
       }
       .channel-empty {
         padding: 10px;
         font-size: 11px;
         text-align: center;
-        color: var(--figma-color-text-tertiary, #b3b3b3);
+        color: var(--figma-color-text-secondary, #767676);
       }
 
       /* ── File selector ── */
@@ -333,7 +368,7 @@
           background 0.15s;
       }
       .file-option:hover {
-        background: var(--figma-color-bg-hover, #fafafa);
+        background: var(--figma-color-bg-hover, #f0f0f0);
       }
       .file-option.selected {
         border-color: var(--figma-color-bg-brand, #0d99ff);
@@ -372,8 +407,8 @@
         text-overflow: ellipsis;
       }
       .file-option .file-key {
-        font-size: 10px;
-        color: var(--figma-color-text-tertiary, #b3b3b3);
+        font-size: 11px;
+        color: var(--figma-color-text-secondary, #767676);
         font-family: "SF Mono", SFMono-Regular, Consolas, monospace;
       }
 
@@ -446,7 +481,7 @@
         font-size: 12px;
       }
       .dash-label {
-        color: var(--figma-color-text-secondary, #999);
+        color: var(--figma-color-text-secondary, #666);
         flex-shrink: 0;
       }
       .dash-value {
@@ -488,7 +523,7 @@
       }
       .step-num.pending {
         background: var(--figma-color-bg-secondary, #f5f5f5);
-        color: var(--figma-color-text-secondary, #999);
+        color: var(--figma-color-text-secondary, #666);
       }
       .step-num.done {
         background: var(--lp-success-bg);
@@ -509,7 +544,7 @@
       }
       .step-desc {
         font-size: 11px;
-        color: var(--figma-color-text-secondary, #999);
+        color: var(--figma-color-text-secondary, #666);
         margin-bottom: 8px;
       }
 
@@ -550,7 +585,7 @@
     <main class="app-main" id="app-main">
       <div id="view-loading" class="view active" style="text-align: center; padding-top: 80px">
         <div class="spinner" style="width: 28px; height: 28px; margin: 0 auto 16px"></div>
-        <p style="color: var(--figma-color-text-secondary, #999)">Loading Library Pulse…</p>
+        <p style="color: var(--figma-color-text-secondary, #666)">Loading Library Pulse…</p>
       </div>
 
       <!-- ════════════════════════════════════════ -->
@@ -619,7 +654,7 @@
                 <div class="file-name" id="current-file-name">Loading…</div>
                 <div class="file-key" id="current-file-key" style="display: none"></div>
               </div>
-              <span class="badge badge-success" style="font-size: 10px">Current file</span>
+              <span class="badge badge-success">Current file</span>
             </div>
 
             <!-- Automatic file identification. Figma hides the file id from
@@ -681,14 +716,14 @@
                     id="custom-message"
                     rows="3"
                     maxlength="500"
-                    placeholder="Posted with every notification. Type @ to mention people or groups."
+                    placeholder="Posted with every notification. Type @ and pick from the list to mention people or groups."
                     style="
                       width: 100%;
                       padding: 8px 10px;
                       font-size: 12px;
                       font-family: inherit;
                       line-height: 1.5;
-                      border: 1px solid var(--figma-color-border, #e5e5e5);
+                      border: 1px solid var(--figma-color-border, #c9c9c9);
                       border-radius: 6px;
                       background: var(--figma-color-bg, #fff);
                       color: var(--figma-color-text, #333);
@@ -703,7 +738,8 @@
                   ></div>
                 </div>
                 <div class="hint" id="mention-hint" style="margin-top: 4px">
-                  Shared with everyone on this file — any editor can change it later.
+                  Only @names picked from the list will notify people — typed text never pings. Any
+                  editor of this file can change this note.
                 </div>
                 <button
                   class="btn btn-secondary btn-sm"
@@ -785,10 +821,10 @@
           </button>
         </div>
         <button
-          class="btn btn-danger"
+          class="btn btn-link-danger"
           id="btn-remove-figma"
           onclick="removeFigmaConnection(this)"
-          style="display: none; margin-top: 8px"
+          style="display: none"
         >
           Remove Figma connection
         </button>
@@ -1247,7 +1283,7 @@
         if (!message) return;
         const span = document.createElement("span");
         span.style.fontSize = "11px";
-        span.style.color = isError ? "var(--lp-danger)" : "var(--figma-color-text-secondary,#999)";
+        span.style.color = isError ? "var(--lp-danger)" : "var(--figma-color-text-secondary,#666)";
         span.textContent = message;
         el.appendChild(span);
       }
@@ -1590,6 +1626,8 @@
           remove.className = "remove";
           remove.textContent = "×";
           remove.title = "Remove channel";
+          remove.setAttribute("role", "button");
+          remove.setAttribute("aria-label", `Remove ${c.name || c.id}`);
           remove.addEventListener("click", () => removeChannel(c.id));
           pill.appendChild(remove);
           list.appendChild(pill);
@@ -1649,7 +1687,9 @@
           hint.style.color = "var(--lp-amber)";
           if (reconnectBtn) reconnectBtn.style.display = "none";
         } else {
-          hint.textContent = "Shared with everyone on this file — any editor can change it later.";
+          hint.textContent =
+            "Only @names picked from the list will notify people — typed text never pings. " +
+            "Any editor of this file can change this note.";
           hint.style.color = "";
           if (reconnectBtn) reconnectBtn.style.display = "none";
         }
@@ -2076,16 +2116,21 @@
         if (btn.dataset.armed === "1") {
           clearTimeout(Number(btn.dataset.armTimer));
           delete btn.dataset.armed;
+          btn.classList.remove("btn-armed");
           btn.textContent = btn.dataset.restLabel || btn.textContent;
           action();
           return;
         }
         btn.dataset.restLabel = btn.textContent;
         btn.dataset.armed = "1";
+        // Escalate visually: the second click lands on an unmistakable
+        // danger fill, not a button identical to its resting state.
+        btn.classList.add("btn-armed");
         btn.textContent = armedLabel;
         btn.dataset.armTimer = String(
           setTimeout(() => {
             delete btn.dataset.armed;
+            btn.classList.remove("btn-armed");
             btn.textContent = btn.dataset.restLabel || btn.textContent;
           }, 3500),
         );
