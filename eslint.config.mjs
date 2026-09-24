@@ -31,6 +31,11 @@ export default [
       ".husky/_/**",
       // Vitest writes transient config snapshots to the repo root; never lint them.
       "**/*.timestamp-*.mjs",
+      // Locally installed agent skills (untracked) vendor their own JS.
+      ".claude/**",
+      ".github/skills/**",
+      ".github/agents/**",
+      ".impeccable/**",
     ],
   },
 

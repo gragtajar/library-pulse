@@ -29,6 +29,45 @@
         overflow: hidden;
       }
 
+      /* ── Semantic color tokens ──
+         Single source for every color that isn't a --figma-color-* variable.
+         Light values are GitHub-Primer-derived (the palette this UI always
+         used); .figma-dark overrides keep the same semantics legible on
+         Figma's dark theme (themeColors: true adds that class on <html>). */
+      :root {
+        --lp-success-bg: #dafbe1;
+        --lp-success-fg: #116329;
+        --lp-warning-bg: #fff8c5;
+        --lp-warning-fg: #4d2d00;
+        --lp-amber: #9a6700;
+        --lp-danger: #cf222e;
+        --lp-danger-bg: #ffebe9;
+        --lp-banner-desc: #57606a;
+        --lp-selected-tint: rgba(13, 153, 255, 0.06);
+        --lp-shadow: rgba(0, 0, 0, 0.12);
+      }
+      .figma-dark {
+        --lp-success-bg: rgba(63, 185, 80, 0.18);
+        --lp-success-fg: #3fb950;
+        --lp-warning-bg: rgba(187, 128, 9, 0.18);
+        --lp-warning-fg: #d4a72c;
+        --lp-amber: #d4a72c;
+        --lp-danger: #ff8182;
+        --lp-danger-bg: rgba(207, 34, 46, 0.18);
+        --lp-banner-desc: var(--figma-color-text-secondary, #a0a0a0);
+        --lp-selected-tint: rgba(13, 153, 255, 0.15);
+        --lp-shadow: rgba(0, 0, 0, 0.5);
+      }
+
+      /* ── Keyboard focus ──
+         One visible focus treatment for everything the input rule doesn't
+         already cover. Outline (not box-shadow) so it survives any button
+         fill, with an offset gap so blue-on-blue stays visible. */
+      :is(textarea, .btn, .channel-pill .remove):focus-visible {
+        outline: 2px solid var(--figma-color-bg-brand, #0d99ff);
+        outline-offset: 1px;
+      }
+
       /* ── Typography ── */
       h1 {
         font-size: 16px;
@@ -81,12 +120,16 @@
         border-radius: 10px;
       }
       .badge-success {
-        background: #dafbe1;
-        color: #116329;
+        background: var(--lp-success-bg);
+        color: var(--lp-success-fg);
       }
       .badge-warning {
-        background: #fff8c5;
-        color: #4d2d00;
+        background: var(--lp-warning-bg);
+        color: var(--lp-warning-fg);
+      }
+      .badge-danger {
+        background: var(--lp-danger-bg);
+        color: var(--lp-danger);
       }
       .badge-neutral {
         background: #eaeef2;
@@ -111,12 +154,20 @@
           opacity 0.15s;
       }
       .btn:disabled {
-        opacity: 0.5;
         cursor: not-allowed;
       }
       .btn-primary {
-        background: var(--figma-color-bg-brand, #0d99ff);
+        background: var(--figma-color-bg-brand, #0b87e0);
         color: #fff;
+        font-weight: 600;
+      }
+      /* Locked, not broken: full-strength disabled surface with quiet text
+         instead of a half-transparent ghost of the enabled button. */
+      .btn-primary:disabled,
+      .btn-secondary:disabled {
+        background: var(--figma-color-bg-disabled, #e6e6e6);
+        border-color: transparent;
+        color: var(--figma-color-text-disabled, #8c8c8c);
       }
       .btn-primary:hover:not(:disabled) {
         opacity: 0.9;
@@ -130,12 +181,12 @@
         background: var(--figma-color-bg-hover, #eee);
       }
       .btn-danger {
-        background: #fff;
-        border: 1px solid #cf222e;
-        color: #cf222e;
+        background: transparent;
+        border: 1px solid var(--lp-danger);
+        color: var(--lp-danger);
       }
       .btn-danger:hover:not(:disabled) {
-        background: #ffebe9;
+        background: var(--lp-danger-bg);
       }
       .btn-sm {
         padding: 5px 10px;
@@ -207,7 +258,7 @@
         line-height: 1;
       }
       .channel-pill .remove:hover {
-        color: #cf222e;
+        color: var(--lp-danger);
       }
 
       /* ── Channel picker (searchable dropdown) ── */
@@ -218,15 +269,18 @@
         position: absolute;
         left: 0;
         right: 0;
-        top: 100%;
+        /* Open upward: both pickers sit low in the scroll area, so a downward
+           list ends up clipped under the sticky footer at the exact moment
+           the user must choose. Space above is guaranteed by steps 1-3. */
+        bottom: 100%;
         z-index: 10;
         max-height: 190px;
         overflow-y: auto;
-        margin-top: 4px;
+        margin-bottom: 4px;
         background: var(--figma-color-bg, #fff);
         border: 1px solid var(--figma-color-border, #e5e5e5);
         border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 -2px 12px var(--lp-shadow);
       }
       .channel-option {
         display: flex;
@@ -283,7 +337,7 @@
       }
       .file-option.selected {
         border-color: var(--figma-color-bg-brand, #0d99ff);
-        background: rgba(13, 153, 255, 0.06);
+        background: var(--lp-selected-tint);
       }
       .file-option .radio {
         width: 16px;
@@ -387,14 +441,31 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 12px;
         padding: 6px 0;
         font-size: 12px;
       }
       .dash-label {
         color: var(--figma-color-text-secondary, #999);
+        flex-shrink: 0;
       }
       .dash-value {
         font-weight: 500;
+        /* Long file names / channel lists must never wrap the label column. */
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* Multi-line values (the team note) stack under their label instead of
+         fighting it for one line. */
+      .dash-row-stack {
+        display: block;
+      }
+      .dash-row-stack .dash-value {
+        display: block;
+        white-space: normal;
+        margin-top: 2px;
       }
 
       /* ── Connection steps ── */
@@ -420,8 +491,8 @@
         color: var(--figma-color-text-secondary, #999);
       }
       .step-num.done {
-        background: #dafbe1;
-        color: #116329;
+        background: var(--lp-success-bg);
+        color: var(--lp-success-fg);
       }
       .step-num.active {
         background: var(--figma-color-bg-brand, #0d99ff);
@@ -440,6 +511,30 @@
         font-size: 11px;
         color: var(--figma-color-text-secondary, #999);
         margin-bottom: 8px;
+      }
+
+      /* ── Delivery-status banner ──
+         Hue tracks the badge: danger for revoked access, warning for
+         failing sends — one family per state, in both themes. */
+      #dash-reconnect-banner {
+        border-color: var(--lp-danger);
+        background: var(--lp-danger-bg);
+      }
+      #dash-reconnect-banner .banner-title {
+        font-weight: 600;
+        color: var(--lp-danger);
+        margin-bottom: 2px;
+      }
+      #dash-reconnect-banner .banner-desc {
+        font-size: 11px;
+        color: var(--lp-banner-desc);
+      }
+      #dash-reconnect-banner.banner-warning {
+        border-color: var(--lp-amber);
+        background: var(--lp-warning-bg);
+      }
+      #dash-reconnect-banner.banner-warning .banner-title {
+        color: var(--lp-warning-fg);
       }
     </style>
   </head>
@@ -566,7 +661,12 @@
                     autocomplete="off"
                   />
                 </div>
-                <div class="channel-dropdown" id="channel-dropdown" style="display: none"></div>
+                <div
+                  class="channel-dropdown"
+                  id="channel-dropdown"
+                  tabindex="-1"
+                  style="display: none"
+                ></div>
               </div>
               <div class="hint" id="channels-hint" style="margin-top: 4px">
                 Pick up to 3 channels. Private channels appear only if the Library Pulse bot has
@@ -592,11 +692,15 @@
                       border-radius: 6px;
                       background: var(--figma-color-bg, #fff);
                       color: var(--figma-color-text, #333);
-                      outline: none;
                       resize: vertical;
                     "
                   ></textarea>
-                  <div class="channel-dropdown" id="mention-dropdown" style="display: none"></div>
+                  <div
+                    class="channel-dropdown"
+                    id="mention-dropdown"
+                    tabindex="-1"
+                    style="display: none"
+                  ></div>
                 </div>
                 <div class="hint" id="mention-hint" style="margin-top: 4px">
                   Shared with everyone on this file — any editor can change it later.
@@ -619,16 +723,12 @@
       <!--  DASHBOARD VIEW                         -->
       <!-- ════════════════════════════════════════ -->
       <div id="view-dashboard" class="view">
-        <p class="subtitle" id="dash-subtitle">Notifications are flowing.</p>
+        <p class="subtitle" id="dash-subtitle">Publish notifications for this file.</p>
 
         <!-- Reconnect banner (shown when delivery_status !== 'ok') -->
-        <div
-          class="card"
-          id="dash-reconnect-banner"
-          style="display: none; border-color: #cf222e; background: #ffebe9"
-        >
-          <div style="font-weight: 600; color: #cf222e; margin-bottom: 2px">Reconnect needed</div>
-          <div style="font-size: 11px; color: #57606a" id="dash-reconnect-desc"></div>
+        <div class="card" id="dash-reconnect-banner" style="display: none">
+          <div class="banner-title" id="dash-reconnect-title">Reconnect needed</div>
+          <div class="banner-desc" id="dash-reconnect-desc"></div>
           <button
             class="btn btn-secondary btn-sm"
             id="dash-reconnect-btn"
@@ -658,11 +758,9 @@
             <span class="dash-label">Channels</span>
             <span class="dash-value" id="dash-channels">—</span>
           </div>
-          <div class="dash-row" id="dash-note-row" style="display: none">
+          <div class="dash-row dash-row-stack" id="dash-note-row" style="display: none">
             <span class="dash-label">Team note</span>
-            <span class="dash-value" id="dash-note" style="text-align: right; max-width: 240px"
-              >—</span
-            >
+            <span class="dash-value" id="dash-note">—</span>
           </div>
         </div>
 
@@ -926,7 +1024,7 @@
         if (message) {
           el.textContent = message;
           el.style.display = "block";
-          el.style.color = isWarn ? "#9a6700" : "";
+          el.style.color = isWarn ? "var(--lp-amber)" : "";
         } else {
           el.textContent = "";
           el.style.display = "none";
@@ -1149,7 +1247,7 @@
         if (!message) return;
         const span = document.createElement("span");
         span.style.fontSize = "11px";
-        span.style.color = isError ? "#cf222e" : "var(--figma-color-text-secondary,#999)";
+        span.style.color = isError ? "var(--lp-danger)" : "var(--figma-color-text-secondary,#999)";
         span.textContent = message;
         el.appendChild(span);
       }
@@ -1543,12 +1641,12 @@
         if (app.mentionDirError === "slack_reauth_required") {
           hint.textContent =
             "@mentions need Slack's updated permissions. Reconnect Slack to enable them — the note itself still works.";
-          hint.style.color = "#9a6700";
+          hint.style.color = "var(--lp-amber)";
           if (reconnectBtn) reconnectBtn.style.display = "inline-flex";
         } else if (app.mentionDirTruncated) {
           hint.textContent =
             "Large workspace — the people list may be incomplete. Type a name to search what's loaded.";
-          hint.style.color = "#9a6700";
+          hint.style.color = "var(--lp-amber)";
           if (reconnectBtn) reconnectBtn.style.display = "none";
         } else {
           hint.textContent = "Shared with everyone on this file — any editor can change it later.";
@@ -1582,7 +1680,7 @@
         if (app.channelsTruncated) {
           el.textContent =
             "Large workspace — the channel list may be incomplete. Type a name to search what's loaded.";
-          el.style.color = "#9a6700";
+          el.style.color = "var(--lp-amber)";
         } else {
           el.textContent =
             "Pick up to 3 channels. Private channels appear only if the Library Pulse bot has been added to them.";
@@ -1814,16 +1912,26 @@
         );
         if (config.slack_team_id) app.slackTeamId = config.slack_team_id;
 
-        document.getElementById("dash-file-name").textContent =
-          config.figma_file_name || config.figma_file_key;
-        document.getElementById("dash-file-key").textContent = config.figma_file_key;
-        document.getElementById("dash-slack-workspace").textContent =
+        // Values ellipsize in CSS; the title attribute keeps the full text
+        // reachable on hover.
+        const setValue = (id, text) => {
+          const el = document.getElementById(id);
+          el.textContent = text;
+          el.title = text;
+        };
+        setValue("dash-file-name", config.figma_file_name || config.figma_file_key);
+        setValue("dash-file-key", config.figma_file_key);
+        setValue(
+          "dash-slack-workspace",
           config.slack_installations?.slack_team_name ||
-          app.slackTeamName ||
-          config.slack_team_id ||
-          "—";
-        document.getElementById("dash-channels").textContent =
-          (config.channels || []).map((c) => c.name || c.id || c).join(", ") || "—";
+            app.slackTeamName ||
+            config.slack_team_id ||
+            "—",
+        );
+        setValue(
+          "dash-channels",
+          (config.channels || []).map((c) => c.name || c.id || c).join(", ") || "—",
+        );
 
         // Team note (org-shared, optional).
         app.customMentions = Array.isArray(config.custom_mentions)
@@ -1833,7 +1941,7 @@
         const noteEl = document.getElementById("dash-note");
         if (typeof config.custom_message === "string" && config.custom_message) {
           noteEl.textContent = config.custom_message;
-          noteRow.style.display = "flex";
+          noteRow.style.display = "block";
         } else {
           noteEl.textContent = "—";
           noteRow.style.display = "none";
@@ -1857,23 +1965,44 @@
       function applyStatus(config) {
         const badge = document.getElementById("dash-status-badge");
         const banner = document.getElementById("dash-reconnect-banner");
+        const title = document.getElementById("dash-reconnect-title");
         const desc = document.getElementById("dash-reconnect-desc");
         const btn = document.getElementById("dash-reconnect-btn");
         const status = config.delivery_status || "ok";
         banner.style.display = "none";
+        banner.classList.remove("banner-warning");
         btn.style.display = "none";
         btn.onclick = null;
 
         if (status !== "ok") {
-          badge.textContent = "Reconnect needed";
-          badge.className = "badge badge-warning";
-          banner.style.display = "block";
-          desc.textContent =
+          // One story per state: badge and banner share the same label and
+          // hue family (danger for revoked access, warning for failing sends).
+          const copy =
             status === "slack_revoked"
-              ? "Slack was disconnected — reconnect Slack to resume notifications."
+              ? {
+                  label: "Slack disconnected",
+                  desc: "Reconnect Slack to resume notifications.",
+                  tone: "danger",
+                }
               : status === "figma_revoked"
-                ? "Figma access was revoked — the original setter must reconnect Figma."
-                : "Recent notifications failed to send — check the destination.";
+                ? {
+                    label: "Figma access revoked",
+                    desc: app.isOwner
+                      ? "Reconnect Figma to resume notifications."
+                      : "Waiting on the original setter to reconnect Figma.",
+                    tone: "danger",
+                  }
+                : {
+                    label: "Deliveries failing",
+                    desc: "Slack is connected, but recent sends failed. Check that the chosen channels still exist and the bot can post there.",
+                    tone: "warning",
+                  };
+          badge.textContent = copy.label;
+          badge.className = copy.tone === "danger" ? "badge badge-danger" : "badge badge-warning";
+          banner.style.display = "block";
+          banner.classList.toggle("banner-warning", copy.tone === "warning");
+          title.textContent = copy.label;
+          desc.textContent = copy.desc;
 
           // Provide the relevant reconnect action (§6c).
           if (status === "slack_revoked") {
