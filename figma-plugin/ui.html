@@ -189,8 +189,11 @@
         border-radius: 6px;
       }
       /* Two-click confirm, armed: the button escalates to a danger fill so
-         the second (destructive) click is knowingly placed. */
-      .btn.btn-armed {
+         the second (destructive) click is knowingly placed. The :hover form
+         must out-rank the buttons' own hover rules — the pointer is still on
+         the button right after the first click, when the prompt must read. */
+      .btn.btn-armed,
+      .btn.btn-armed:hover:not(:disabled) {
         background: var(--lp-danger);
         border-color: var(--lp-danger);
         color: #fff;
@@ -515,14 +518,15 @@
         background: transparent;
       }
       /* Scroll affordance: content fades at the bottom edge while there is
-         more below (sticky, so it rides the container's viewport). */
+         more below (sticky, so it rides the container's viewport). It takes
+         its own 20px after the content — no negative margin — so when a view
+         fits without scrolling it sits over empty space, never over text. */
       .app-main::after {
         content: "";
         position: sticky;
         bottom: -16px;
         display: block;
         height: 20px;
-        margin-top: -20px;
         background: linear-gradient(transparent, var(--figma-color-bg, #fff));
         pointer-events: none;
       }
@@ -778,12 +782,7 @@
                     autocomplete="off"
                   />
                 </div>
-                <div
-                  class="channel-dropdown"
-                  id="channel-dropdown"
-                  tabindex="-1"
-                  style="display: none"
-                ></div>
+                <div class="channel-dropdown" id="channel-dropdown" style="display: none"></div>
               </div>
               <div class="hint" id="channels-hint" style="margin-top: 4px">
                 Pick up to 3 channels. Private channels appear only if the Library Pulse bot has
@@ -806,12 +805,7 @@
                     maxlength="500"
                     placeholder="Posted with every notification. Type @ and pick from the list to mention people or groups."
                   ></textarea>
-                  <div
-                    class="channel-dropdown"
-                    id="mention-dropdown"
-                    tabindex="-1"
-                    style="display: none"
-                  ></div>
+                  <div class="channel-dropdown" id="mention-dropdown" style="display: none"></div>
                 </div>
                 <div class="hint" id="mention-hint" style="margin-top: 4px">
                   Highlighted @names will be notified — pick them from the list after typing @. Any
