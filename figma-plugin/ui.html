@@ -74,15 +74,22 @@
       }
 
       /* ── Typography ── */
-      h1 {
-        font-size: 16px;
-        font-weight: 700;
-        margin-bottom: 4px;
-      }
       .subtitle {
         font-size: 11px;
         color: var(--figma-color-text-secondary, #666);
         margin-bottom: 20px;
+      }
+      /* Dashboard's first line: the file's status badge sits beside the
+         subtitle (Figma's own window title bar already names the plugin). */
+      .dash-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 20px;
+      }
+      .dash-heading .subtitle {
+        margin-bottom: 0;
       }
 
       /* ── Cards ── */
@@ -485,21 +492,6 @@
       }
 
       /* ── Persistent chrome: fixed header + footer, scrollable middle ── */
-      .app-header {
-        flex: 0 0 auto;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--figma-color-border, #e5e5e5);
-        background: var(--figma-color-bg, #fff);
-      }
-      .app-header h1 {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 700;
-      }
       .app-main {
         flex: 1 1 auto;
         overflow-y: auto;
@@ -643,11 +635,6 @@
     <!-- ════════════════════════════════════════ -->
     <!--  LOADING VIEW                           -->
     <!-- ════════════════════════════════════════ -->
-    <header class="app-header">
-      <h1>Library Pulse</h1>
-      <span class="badge badge-success" id="dash-status-badge" style="display: none">Active</span>
-    </header>
-
     <main class="app-main" id="app-main">
       <div id="view-loading" class="view active" style="text-align: center; padding-top: 80px">
         <div class="spinner" style="width: 28px; height: 28px; margin: 0 auto 16px"></div>
@@ -829,7 +816,12 @@
       <!--  DASHBOARD VIEW                         -->
       <!-- ════════════════════════════════════════ -->
       <div id="view-dashboard" class="view">
-        <p class="subtitle" id="dash-subtitle">Publish notifications for this file.</p>
+        <div class="dash-heading">
+          <p class="subtitle" id="dash-subtitle">Publish notifications for this file.</p>
+          <span class="badge badge-success" id="dash-status-badge" style="display: none"
+            >Active</span
+          >
+        </div>
 
         <!-- Reconnect banner (shown when delivery_status !== 'ok') -->
         <div class="card" id="dash-reconnect-banner" style="display: none">
@@ -1075,8 +1067,8 @@
         document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
         document.getElementById(`view-${name}`).classList.add("active");
 
-        // Persistent chrome: the sticky footer's action group and the header
-        // status badge are toggled to match the active view.
+        // Persistent chrome: the sticky footer's action group and the
+        // dashboard's status badge are toggled to match the active view.
         const footer = document.getElementById("app-footer");
         const footerSetup = document.getElementById("footer-setup");
         const footerDash = document.getElementById("footer-dashboard");
