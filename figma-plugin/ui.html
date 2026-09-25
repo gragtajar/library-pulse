@@ -1224,6 +1224,23 @@
             );
             return;
           }
+          // 401 = the stored plugin session expired (sessions last 30 days) or
+          // is invalid. Refresh can't fix that, so clear it and re-run the
+          // automatic Figma connect; markFigmaConnected() restarts detection
+          // with the new session once the browser confirmation completes.
+          if (res.status === 401) {
+            app.sessionToken = null;
+            app.figmaConnected = false;
+            setStorage("figma_auth", null);
+            updateSetupState();
+            setDetectStatus(
+              "Your Figma sign-in expired. Confirm access in the browser tab that opens — this file is identified automatically afterwards.",
+              false,
+              null,
+            );
+            startFigmaAuto();
+            return;
+          }
           if (data.error === "figma_reauth_required") {
             setDetectStatus(
               "File detection needs Figma's updated permission. Reconnect Figma to grant it — if that fails, Figma is still reviewing the update; try again later.",
@@ -1232,7 +1249,19 @@
             );
             return;
           }
-          setDetectStatus("Couldn't identify this file. Tap Refresh to try again.", true, "retry");
+          if (data.error === "figma_not_connected") {
+            setDetectStatus(
+              "Your Figma connection is missing. Reconnect Figma to identify this file.",
+              true,
+              "reconnect",
+            );
+            return;
+          }
+          setDetectStatus(
+            `Couldn't identify this file (error ${res.status}). Tap Refresh to try again.`,
+            true,
+            "retry",
+          );
         } catch (e) {
           detectInFlight = false;
           setDetectStatus(
