@@ -9,8 +9,10 @@
  *      registered it, so a valid passcode can only ever post to *that user's*
  *      config for *that file* — never across tenants.
  *   3. Look up active configs for (webhook owner, file).
- *   4. Fan out to each channel with bounded concurrency, deduped per channel so
- *      a Figma retry after a partial send re-drives only the missing channels.
+ *   4. Fan out to the config's destination — each Slack channel, or each
+ *      confirmed email recipient — with bounded concurrency, deduped per
+ *      target so a Figma retry after a partial send re-drives only the ones
+ *      that were missed.
  *
  * This endpoint never sets CORS — Figma calls it server-to-server.
  */
@@ -23,6 +25,7 @@ import { deriveEventKey, hasSentDelivery } from "../lib/idempotency.js";
 import { fetchWithTimeout, withErrorHandling } from "../lib/http.js";
 import { logger } from "../lib/logger.js";
 import { deliveryStatusFor } from "../lib/delivery-status.js";
+import { sendPublishEmails } from "../lib/email-delivery.js";
 
 const SLACK_POST_CONCURRENCY = 4;
 
@@ -127,6 +130,29 @@ export default withErrorHandling(
     const allResults = [];
 
     for (const config of configs) {
+      // Email destination (migration 006): one email per confirmed recipient,
+      // deduped per recipient like channels are. A row without the column
+      // (not-yet-migrated database) is a Slack config.
+      if (/** @type {any} */ (config).destination === "email") {
+        const r = await sendPublishEmails({ config, payload, fileKey, eventKey });
+        await updateDeliveryStatus(config, r.errorCodes, r.failed);
+        logger.info("webhook_config_dispatched", {
+          config_id: config.id,
+          destination: "email",
+          sent: r.sent,
+          failed: r.failed,
+          skipped: r.skipped,
+          total: r.total,
+        });
+        allResults.push({
+          configId: config.id,
+          sent: r.sent,
+          failed: r.failed,
+          skipped: r.skipped,
+        });
+        continue;
+      }
+
       const tokenEnc = /** @type {any} */ (config.slack_installations)?.bot_token_enc;
       if (!tokenEnc) {
         logger.warn("webhook_config_missing_token", { config_id: config.id });

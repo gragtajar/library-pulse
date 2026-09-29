@@ -120,3 +120,26 @@ export async function hasSentDelivery(eventKey, configId, channelId) {
     .maybeSingle();
   return !!data;
 }
+
+/**
+ * The email twin of `hasSentDelivery`: has this exact (event, config,
+ * recipient) already been emailed successfully? SES has no idempotency token,
+ * so this check is what keeps a Figma retry from emailing someone twice.
+ *
+ * @param {string} eventKey
+ * @param {string} configId
+ * @param {string} recipient
+ * @returns {Promise<boolean>}
+ */
+export async function hasSentEmailDelivery(eventKey, configId, recipient) {
+  const { data } = await supabase
+    .from("notification_log")
+    .select("id")
+    .eq("event_key", eventKey)
+    .eq("configuration_id", configId)
+    .eq("recipient", recipient)
+    .eq("status", "sent")
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+}

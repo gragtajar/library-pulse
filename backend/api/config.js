@@ -5,10 +5,18 @@
  *   GET    ?fileKey=…  → the file's single shared config (+ isOwner), gated by a
  *                        file-access check. No fileKey → legacy: the caller's own
  *                        configs (kept so the currently-live plugin keeps working).
- *   POST   { fileKey, fileName?, slackTeamId, channels }
+ *   POST   { fileKey, fileName?, destination?, … }
  *                      → create the file's config (or, for the original setter,
  *                        update in place); 409 if another user already owns it.
- *   PUT    { id|fileKey, …updates } → any edit-access user updates channels, etc.
+ *                        Slack:  { slackTeamId, channels }
+ *                        Email:  { destination: "email", emailRecipients, timezone }
+ *   PUT    { id|fileKey, …updates } → any edit-access user updates channels or
+ *                        recipients, the note, or switches destination.
+ *
+ * A config targets ONE destination (lib/config-destination.js plans the
+ * columns). Newly added email addresses are sent a confirmation and stay
+ * "pending" until their owner confirms; the response's `emailConfirmations`
+ * says how many confirmations went out.
  *   DELETE ?id=…|?fileKey=… → deactivate the config (any edit-access user); the
  *                        original setter also tears down the Figma webhook.
  *
@@ -32,13 +40,14 @@ import { logger } from "../lib/logger.js";
 import { requireSession } from "../lib/session.js";
 import { ForbiddenError, NotFoundError, UpstreamError, ValidationError } from "../lib/errors.js";
 import {
-  assertChannelList,
   assertCustomMessage,
   assertFigmaFileKey,
   assertMentionList,
   assertUuid,
 } from "../lib/validators.js";
 import { assertFileAccess, getFigmaAccessToken } from "../lib/figma-access.js";
+import { planCreate, planUpdate } from "../lib/config-destination.js";
+import { sendConfirmations } from "../lib/email-delivery.js";
 
 const PG_UNIQUE_VIOLATION = "23505";
 // Only ever expose non-secret columns to the client. `bot_token_enc` is never
@@ -129,18 +138,20 @@ async function handlePost(req, res) {
   const body = /** @type {Record<string, unknown> | null} */ (req.body) ?? {};
 
   const fileKey = assertFigmaFileKey(body.fileKey);
-  const slackTeamId = typeof body.slackTeamId === "string" ? body.slackTeamId : "";
-  if (!slackTeamId) throw new ValidationError("Missing slackTeamId");
   const fileName = typeof body.fileName === "string" ? body.fileName.slice(0, 200) : null;
-  const channels = assertChannelList(body.channels);
+  // Validates the whole destination (Slack workspace + channels, or email
+  // addresses + timezone) before anything is read or written.
+  const createPlan = planCreate(body);
 
   // Optional team note (migration 004). Only touch the columns when the client
-  // sent the fields, so a pre-004 database never sees them.
+  // sent the fields, so a pre-004 database never sees them. Mentions are a
+  // Slack concept: an email config keeps the note as plain text.
   /** @type {Record<string, unknown>} */
   const noteFields = {};
   if (body.customMessage !== undefined) {
     noteFields.custom_message = assertCustomMessage(body.customMessage);
-    noteFields.custom_mentions = assertMentionList(body.customMentions);
+    noteFields.custom_mentions =
+      createPlan.destination === "email" ? [] : assertMentionList(body.customMentions);
   }
 
   // One config per file. If it already exists and the caller isn't the setter,
@@ -156,14 +167,16 @@ async function handlePost(req, res) {
     if (!isOwner) {
       return res.status(409).json({ error: "config_exists", config: existing, isOwner: false });
     }
-    // Owner re-saving (covers the live plugin's edit-via-POST). Update in place.
+    // Owner re-saving (covers the live plugin's edit-via-POST). Update in place,
+    // by the same rules as an edit — retained email addresses keep their
+    // confirmation state, only new ones get a confirmation.
+    const plan = planUpdate(body, existing);
     const { data: updated, error: upErr } = await supabase
       .from("configurations")
       .update({
         figma_file_name: fileName,
-        slack_team_id: slackTeamId,
-        channels,
         is_active: true,
+        ...plan.fields,
         ...noteFields,
       })
       .eq("id", existing.id)
@@ -174,7 +187,10 @@ async function handlePost(req, res) {
       throw new UpstreamError("config_save_failed");
     }
     const webhookStatus = await registerWebhookReporting(callerId, fileKey);
-    return res.status(200).json({ ...updated, webhookStatus, isOwner: true });
+    const emailConfirmations = await confirmNewRecipients(updated, plan.addedEmails);
+    return res
+      .status(200)
+      .json({ ...updated, webhookStatus, isOwner: true, ...emailConfirmations });
   }
 
   // ── Create ── Webhook registration (below) is the edit-access gate: Figma
@@ -186,9 +202,8 @@ async function handlePost(req, res) {
       created_by: callerId,
       figma_file_key: fileKey,
       figma_file_name: fileName,
-      slack_team_id: slackTeamId,
-      channels,
       is_active: true,
+      ...createPlan.fields,
       ...noteFields,
     })
     .select(CONFIG_SELECT)
@@ -211,7 +226,8 @@ async function handlePost(req, res) {
   }
 
   const webhookStatus = await registerWebhookReporting(callerId, fileKey);
-  return res.status(201).json({ ...config, webhookStatus, isOwner: true });
+  const emailConfirmations = await confirmNewRecipients(config, createPlan.addedEmails);
+  return res.status(201).json({ ...config, webhookStatus, isOwner: true, ...emailConfirmations });
 }
 
 /**
@@ -229,18 +245,20 @@ async function handlePut(req, res) {
   // without a probe; other users are access-checked (needs webhooks:read).
   if (row.created_by !== callerId) await assertFileAccess(callerId, row.figma_file_key);
 
+  // Destination columns: channels / workspace, or email recipients / timezone,
+  // including a switch from one destination to the other.
+  const plan = planUpdate(body, row);
   /** @type {Record<string, unknown>} */
-  const updates = {};
-  if (body.channels !== undefined) updates.channels = assertChannelList(body.channels);
+  const updates = { ...plan.fields };
   if (typeof body.fileName === "string") updates.figma_file_name = body.fileName.slice(0, 200);
-  if (typeof body.slackTeamId === "string" && body.slackTeamId)
-    updates.slack_team_id = body.slackTeamId;
   if (typeof body.isActive === "boolean") updates.is_active = body.isActive;
   // Optional team note — sending customMessage (even null/empty to clear it)
-  // updates both columns; the mention list is re-validated wholesale.
+  // updates both columns; the mention list is re-validated wholesale. An
+  // email config keeps the note as plain text (mentions are Slack-only).
   if (body.customMessage !== undefined) {
     updates.custom_message = assertCustomMessage(body.customMessage);
-    updates.custom_mentions = assertMentionList(body.customMentions);
+    updates.custom_mentions =
+      plan.destination === "email" ? [] : assertMentionList(body.customMentions);
   }
 
   if (Object.keys(updates).length === 0) {
@@ -258,7 +276,10 @@ async function handlePut(req, res) {
     logger.error("config_update_failed", { err: error });
     throw new UpstreamError("config_update_failed");
   }
-  return res.status(200).json({ ...data, isOwner: row.created_by === callerId });
+  const emailConfirmations = await confirmNewRecipients(data, plan.addedEmails);
+  return res
+    .status(200)
+    .json({ ...data, isOwner: row.created_by === callerId, ...emailConfirmations });
 }
 
 /**
@@ -303,19 +324,45 @@ async function handleDelete(req, res) {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Find a config by uuid `id` or by `fileKey`. Returns the minimal row needed
- * for authorization decisions, or null.
+ * Send the double-opt-in confirmation to addresses this write just added.
+ * Returns the fragment to merge into the response (`{}` when there was
+ * nothing to send). Never throws — the config is already saved, and a mail
+ * outage must not turn that into an error.
+ *
+ * @param {any} config  the saved row
+ * @param {string[]} addedEmails
+ * @returns {Promise<{ emailConfirmations?: { sent: number, failed: number, skipped: number } }>}
+ */
+async function confirmNewRecipients(config, addedEmails) {
+  if (addedEmails.length === 0) return {};
+  try {
+    return { emailConfirmations: await sendConfirmations(config, addedEmails) };
+  } catch (err) {
+    logger.warn("email_confirmations_failed", {
+      config_id: config?.id,
+      reason: err instanceof Error ? err.message : String(err),
+    });
+    return { emailConfirmations: { sent: 0, failed: addedEmails.length, skipped: 0 } };
+  }
+}
+
+/**
+ * Find a config by uuid `id` or by `fileKey`. Returns the row needed for
+ * authorization and destination planning, or null. `*` rather than a column
+ * list on purpose: the destination columns (migration 006) must not break a
+ * deploy against a not-yet-migrated database — absent columns are simply
+ * absent keys, which planUpdate reads as "a Slack config".
  *
  * @param {unknown} idRaw
  * @param {unknown} fileKeyRaw
- * @returns {Promise<{ id: string, figma_file_key: string, created_by: string|null } | null>}
+ * @returns {Promise<{ id: string, figma_file_key: string, created_by: string|null, destination?: unknown, email_recipients?: unknown } | null>}
  */
 async function locateConfig(idRaw, fileKeyRaw) {
   if (typeof idRaw === "string" && idRaw) {
     assertUuid(idRaw);
     const { data } = await supabase
       .from("configurations")
-      .select("id, figma_file_key, created_by")
+      .select("*")
       .eq("id", idRaw)
       .maybeSingle();
     return data ?? null;
@@ -324,7 +371,7 @@ async function locateConfig(idRaw, fileKeyRaw) {
     assertFigmaFileKey(fileKeyRaw);
     const { data } = await supabase
       .from("configurations")
-      .select("id, figma_file_key, created_by")
+      .select("*")
       .eq("figma_file_key", fileKeyRaw)
       .maybeSingle();
     return data ?? null;

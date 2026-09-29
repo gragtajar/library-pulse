@@ -189,6 +189,111 @@ export function assertChannelList(v) {
   });
 }
 
+/** Notification destinations a file config can target (migration 006). */
+const DESTINATIONS = new Set(["slack", "email"]);
+
+/**
+ * Validate the destination. Absent (older plugin builds) means Slack, which is
+ * the only destination those builds know about.
+ *
+ * @param {unknown} v
+ * @returns {"slack" | "email"}
+ */
+export function assertDestination(v) {
+  if (v == null) return "slack";
+  if (typeof v !== "string" || !DESTINATIONS.has(v)) {
+    throw new ValidationError("Destination must be 'slack' or 'email'");
+  }
+  return /** @type {"slack" | "email"} */ (v);
+}
+
+// Email addresses: the shape browsers accept for <input type="email"> (the
+// WHATWG HTML "valid e-mail address" grammar), plus two practical rules that
+// grammar leaves out — the domain must have at least one dot (a bare host
+// can't receive mail from the internet) and the RFC 5321 length caps apply
+// (64-char local part, 254-char address). Keep in sync with `isValidEmail`
+// in figma-plugin/ui.html; tests/email-validation-parity.test.js pins it.
+const EMAIL_LOCAL = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/;
+// A domain label: 1–63 letters, digits or hyphens, not starting or ending
+// with a hyphen (checked separately to keep the pattern linear).
+const EMAIL_DOMAIN_LABEL = /^[a-zA-Z0-9-]{1,63}$/;
+export const EMAIL_RECIPIENTS_MAX = 5;
+
+/**
+ * @param {unknown} v
+ * @returns {boolean}
+ */
+export function isValidEmail(v) {
+  if (typeof v !== "string" || v.length === 0 || v.length > 254) return false;
+  const at = v.lastIndexOf("@");
+  if (at < 1 || at === v.length - 1) return false;
+  const local = v.slice(0, at);
+  const domain = v.slice(at + 1);
+  if (local.length > 64 || !EMAIL_LOCAL.test(local)) return false;
+  const labels = domain.split(".");
+  if (labels.length < 2) return false;
+  return labels.every(
+    (label) => EMAIL_DOMAIN_LABEL.test(label) && !label.startsWith("-") && !label.endsWith("-"),
+  );
+}
+
+/**
+ * Canonical form for storage and comparison: trimmed and lower-cased. (Mail
+ * systems treat local parts case-insensitively in practice; storing one
+ * spelling is what makes the 5-address cap and dedupe honest.)
+ *
+ * @param {string} v
+ * @returns {string}
+ */
+export function normalizeEmail(v) {
+  return v.trim().toLowerCase();
+}
+
+/**
+ * Validate the email destination's recipient list: 1–5 well-formed addresses,
+ * normalized and de-duplicated (order preserved).
+ *
+ * @param {unknown} v
+ * @returns {string[]}
+ */
+export function assertEmailList(v) {
+  if (!Array.isArray(v) || v.length < 1 || v.length > EMAIL_RECIPIENTS_MAX) {
+    throw new ValidationError(`Provide between 1 and ${EMAIL_RECIPIENTS_MAX} email addresses`);
+  }
+  /** @type {string[]} */
+  const out = [];
+  for (const entry of v) {
+    if (typeof entry !== "string") throw new ValidationError("Email addresses must be strings");
+    const email = normalizeEmail(entry);
+    if (!isValidEmail(email)) {
+      throw new ValidationError(`Invalid email address: ${email.slice(0, 80)}`);
+    }
+    if (!out.includes(email)) out.push(email);
+  }
+  return out;
+}
+
+/**
+ * Validate an IANA timezone name (e.g. "Asia/Kolkata"). The shape check keeps
+ * junk out of the database; the Intl probe is the real test — it accepts
+ * every zone the runtime can format in (aliases included) and throws a
+ * RangeError for anything else.
+ *
+ * @param {unknown} v
+ * @returns {string}
+ */
+export function assertTimezone(v) {
+  if (typeof v !== "string" || !/^[A-Za-z0-9_+\-/]{1,64}$/.test(v)) {
+    throw new ValidationError("Invalid timezone");
+  }
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: v });
+  } catch {
+    throw new ValidationError("Unknown timezone");
+  }
+  return v;
+}
+
 // Exported for tests.
 export const _patterns = {
   SLACK_CHANNEL_ID,
@@ -197,4 +302,6 @@ export const _patterns = {
   UUID_V4,
   SLACK_USER_ID,
   SLACK_USERGROUP_ID,
+  EMAIL_LOCAL,
+  EMAIL_DOMAIN_LABEL,
 };
