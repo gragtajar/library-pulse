@@ -29,7 +29,7 @@ describe("buildSendInput", () => {
 
   it("adds the RFC 8058 one-click headers only when there is an unsubscribe link", () => {
     expect(buildSendInput(MSG, SENDER).Content.Simple).not.toHaveProperty("Headers");
-    const url = "https://library-pulse.vercel.app/api/email/unsubscribe?token=abc.def";
+    const url = "https://library-pulse.vercel.app/api/email?action=unsubscribe&token=abc.def";
     const withLink = buildSendInput({ ...MSG, unsubscribeUrl: url }, SENDER);
     expect(withLink.Content.Simple.Headers).toEqual([
       { Name: "List-Unsubscribe", Value: `<${url}>` },

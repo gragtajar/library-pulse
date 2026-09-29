@@ -66,7 +66,7 @@ export async function sendConfirmations(config, emails) {
           return "skipped";
         }
         const token = mintEmailToken("confirm", config.id, email);
-        const confirmUrl = `${publicUrl()}/api/email/confirm?token=${encodeURIComponent(token)}`;
+        const confirmUrl = `${publicUrl()}/api/email?action=confirm&token=${encodeURIComponent(token)}`;
         const mail = buildConfirmEmail({
           fileName: config.figma_file_name,
           recipient: email,
@@ -135,7 +135,7 @@ export async function sendPublishEmails({ config, payload, fileKey, eventKey }) 
     const results = await Promise.allSettled(
       chunk.map((email) => {
         const token = mintEmailToken("unsubscribe", config.id, email);
-        const unsubscribeUrl = `${publicUrl()}/api/email/unsubscribe?token=${encodeURIComponent(token)}`;
+        const unsubscribeUrl = `${publicUrl()}/api/email?action=unsubscribe&token=${encodeURIComponent(token)}`;
         const mail = buildPublishEmail(payload, fileKey, {
           note: config.custom_message ?? null,
           timezone: config.email_timezone ?? null,

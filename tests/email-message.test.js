@@ -4,7 +4,7 @@ import { buildConfirmEmail, buildPublishEmail, formatWhen } from "../backend/lib
 
 const OPTS = {
   recipient: "ana@example.com",
-  unsubscribeUrl: "https://library-pulse.vercel.app/api/email/unsubscribe?token=abc.def",
+  unsubscribeUrl: "https://library-pulse.vercel.app/api/email?action=unsubscribe&token=abc.def",
   timezone: "Asia/Kolkata",
 };
 
@@ -122,7 +122,7 @@ describe("email HTML is well-formed for mail clients", () => {
   const confirm = buildConfirmEmail({
     fileName: 'Quote "test"',
     recipient: "ana@example.com",
-    confirmUrl: "https://library-pulse.vercel.app/api/email/confirm?token=abc.def",
+    confirmUrl: "https://library-pulse.vercel.app/api/email?action=confirm&token=abc.def",
   });
 
   it.each([
@@ -176,7 +176,7 @@ describe("buildConfirmEmail", () => {
     const m = buildConfirmEmail({
       fileName: "DS <Core>",
       recipient: "ana@example.com",
-      confirmUrl: "https://library-pulse.vercel.app/api/email/confirm?token=abc.def",
+      confirmUrl: "https://library-pulse.vercel.app/api/email?action=confirm&token=abc.def",
     });
     expect(m.subject).toBe("Confirm Library Pulse updates for DS <Core>");
     expect(m.html).toContain("DS &lt;Core&gt;");
@@ -185,7 +185,7 @@ describe("buildConfirmEmail", () => {
     expect(m.html).toContain("Confirm address");
     expect(m.html).toContain("token=abc.def");
     expect(m.text).toContain(
-      "Confirm: https://library-pulse.vercel.app/api/email/confirm?token=abc.def",
+      "Confirm: https://library-pulse.vercel.app/api/email?action=confirm&token=abc.def",
     );
     expect(m.text).toContain("expires in 7 days");
   });

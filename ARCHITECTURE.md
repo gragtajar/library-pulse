@@ -24,7 +24,7 @@ flowchart LR
         Status["/api/auth-status"]
         Config["/api/config"]
         SlackChannels["/api/slack/channels"]
-        EmailLinks["/api/email/confirm · unsubscribe"]
+        EmailLinks["/api/email<br/>(confirm · unsubscribe)"]
         ResolveFile["/api/figma/resolve-file"]
         Webhook["/api/webhook"]
         Health["/api/health"]
@@ -64,7 +64,7 @@ The system has **three runtimes** with disjoint trust models:
 
 3. **Vercel serverless backend** (`backend/api/*.js`) — Node 22 ESM. Holds the Slack/Figma client secrets, the SES sending credentials and the AES encryption key. Talks to Supabase and to the upstream Slack, Figma and Amazon SES APIs.
 
-The end-user browser is involved only during OAuth — it never sees an API call from the plugin. An email recipient's browser only ever opens the two link pages (`/api/email/confirm`, `/api/email/unsubscribe`).
+The end-user browser is involved only during OAuth — it never sees an API call from the plugin. An email recipient's browser only ever opens the two link pages (`/api/email?action=confirm` and `/api/email?action=unsubscribe`).
 
 ---
 
@@ -88,7 +88,7 @@ End user clicks "Connect Slack" in plugin UI
 
 Figma OAuth is structurally identical (different scopes, different upstream URL, different table).
 
-The email destination has no OAuth. Saving a list of addresses stores each new one as `pending` and sends it a confirmation email; the recipient's click on **Confirm address** (`POST /api/email/confirm`, authorized by the signed token in the link) flips it to `confirmed`.
+The email destination has no OAuth. Saving a list of addresses stores each new one as `pending` and sends it a confirmation email; the recipient's click on **Confirm address** (`POST /api/email?action=confirm`, authorized by the signed token in the link) flips it to `confirmed`.
 
 ---
 
@@ -135,7 +135,7 @@ Configuration is **org-shared per file**: there is one config and one webhook pe
 | Figma webhook → `/api/webhook`   | Anyone can POST                    | Hard-require `webhook_id` + passcode header, `timingSafeEqual` compare, dedupe via `webhook_events` UNIQUE                                                                                      |
 | Backend → Slack                  | Bot token is in env once decrypted | `fetchWithTimeout(8s)`, bounded concurrency, never log token                                                                                                                                    |
 | Backend → Amazon SES             | IAM key limited to sending         | Explicit `SES_*` credentials (never the ambient `AWS_*`), one attempt with 3 s connect / 5 s request timeouts, one recipient per call, addresses masked in logs                                 |
-| Recipient → `/api/email/*`       | Anyone can open the URL            | HMAC-signed token bound to one config + one address (confirm links expire in 7 days); `GET` only renders, `POST` acts; escaped HTML under a no-script CSP                                       |
+| Recipient → `/api/email`         | Anyone can open the URL            | HMAC-signed token bound to one config + one address (confirm links expire in 7 days); `GET` only renders, `POST` acts; escaped HTML under a no-script CSP                                       |
 | Backend → Supabase               | Service-role key bypasses RLS      | RLS still enabled in case the key leaks; structured logs scrub tokens                                                                                                                           |
 
 The encryption key (`ENCRYPTION_KEY`) is the single root of secret in the system. If it leaks, every stored OAuth token must be revoked at the providers. See [`docs/runbooks/rotate-encryption-key.md`](./docs/runbooks/rotate-encryption-key.md).
@@ -151,7 +151,7 @@ library-pulse/
 │   ├── code.js                ← sandbox (no DOM, no network)
 │   └── ui.html                ← iframe UI (DOM + fetch)
 ├── backend/                   ← Vercel serverless functions
-│   ├── api/                   ← each file = one HTTP endpoint
+│   ├── api/                   ← each file = one HTTP endpoint = one Vercel Function
 │   ├── lib/                   ← shared helpers (encryption, validators, logger, …)
 │   ├── package.json
 │   └── vercel.json
@@ -183,6 +183,8 @@ library-pulse/
 | `typescript`                           | `tsc` runs in `checkJs` mode against `.js` sources; no `.ts` files yet |
 
 We deliberately have **zero runtime web frameworks** — every endpoint is a default-export handler that takes `(req, res)`. Vercel's runtime gives us the rest.
+
+**Function budget.** Without a framework, every file under `backend/api/` becomes its own Vercel Function, and the Hobby plan allows 12 per deployment. `backend/api/` is at 12. A thirteenth doesn't fail the build: the deployment errors afterwards with nothing in the build log, so `tests/vercel-function-count.test.js` fails first. New endpoints either share a function and route by a parameter (as `/api/email` does with `?action=`) or the project moves to a paid plan.
 
 ---
 

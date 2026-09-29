@@ -97,7 +97,7 @@ describe("sendPublishEmails", () => {
     await sendPublishEmails(ARGS);
     for (const [mail] of h.sendEmail.mock.calls) {
       expect(mail.unsubscribeUrl).toMatch(
-        /^https:\/\/library-pulse\.vercel\.app\/api\/email\/unsubscribe\?token=/,
+        /^https:\/\/library-pulse\.vercel\.app\/api\/email\?action=unsubscribe&token=/,
       );
       expect(verifyEmailToken(tokenOf(mail.unsubscribeUrl), "unsubscribe")).toEqual({
         configId: CONFIG.id,
@@ -208,7 +208,7 @@ describe("sendConfirmations", () => {
     expect(mail.subject).toBe("Confirm Library Pulse updates for DS Core");
     expect(mail.unsubscribeUrl).toBeUndefined();
     const url = /Confirm: (\S+)/.exec(mail.text)?.[1] ?? "";
-    expect(url).toMatch(/^https:\/\/library-pulse\.vercel\.app\/api\/email\/confirm\?token=/);
+    expect(url).toMatch(/^https:\/\/library-pulse\.vercel\.app\/api\/email\?action=confirm&token=/);
     expect(verifyEmailToken(tokenOf(url), "confirm")).toEqual({
       configId: CONFIG.id,
       email: "cho@example.com",

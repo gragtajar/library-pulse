@@ -17,8 +17,7 @@ vi.mock("../backend/lib/supabase.js", async () => {
   return { default: h.db };
 });
 
-import confirm from "../backend/api/email/confirm.js";
-import unsubscribe from "../backend/api/email/unsubscribe.js";
+import handler from "../backend/api/email.js";
 import { mintEmailToken } from "../backend/lib/email-tokens.js";
 import { createFakeResponse } from "./helpers/fake-supabase.js";
 
@@ -50,21 +49,24 @@ function statusOf(email) {
 }
 
 /**
- * @param {Function} handler
+ * @param {"confirm" | "unsubscribe" | string | undefined} action
  * @param {{ method: string, token?: string, body?: unknown }} opts
  */
-async function call(handler, { method, token, body }) {
+async function call(action, { method, token, body }) {
   const res = createFakeResponse();
-  await handler(
-    { method, url: "/api/email", headers: {}, query: token === undefined ? {} : { token }, body },
-    res,
+  // Only the parameters that were given, as a real request would carry them.
+  const query = Object.fromEntries(
+    Object.entries({ action, token }).filter(([, value]) => value !== undefined),
   );
+  await handler({ method, url: "/api/email", headers: {}, query, body }, res);
   return res;
 }
+const confirm = "confirm";
+const unsubscribe = "unsubscribe";
 
 beforeEach(seed);
 
-describe("/api/email/confirm", () => {
+describe("/api/email?action=confirm", () => {
   it("GET shows a confirm button and changes nothing (link scanners can't confirm)", async () => {
     const token = mintEmailToken("confirm", ID, "cho@example.com");
     const res = await call(confirm, { method: "GET", token });
@@ -152,7 +154,7 @@ describe("/api/email/confirm", () => {
   });
 });
 
-describe("/api/email/unsubscribe", () => {
+describe("/api/email?action=unsubscribe", () => {
   it("GET shows an unsubscribe button and changes nothing", async () => {
     const token = mintEmailToken("unsubscribe", ID, "ana@example.com");
     const res = await call(unsubscribe, { method: "GET", token });
@@ -227,5 +229,39 @@ describe("/api/email/unsubscribe", () => {
     const token = mintEmailToken("unsubscribe", ID, "ana@example.com");
     const res = await call(unsubscribe, { method: "POST", token });
     expect(res.statusCode).toBe(502);
+  });
+});
+
+describe("/api/email routing", () => {
+  it("rejects a missing or unknown action without touching anything", async () => {
+    const token = mintEmailToken("confirm", ID, "cho@example.com");
+    for (const action of [undefined, "", "delete", "confirmx"]) {
+      const res = await call(action, { method: "POST", token });
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toContain("This link isn&#39;t valid");
+    }
+    expect(statusOf("cho@example.com")).toBe("pending");
+  });
+
+  it("a confirm token can't unsubscribe and an unsubscribe token can't confirm", async () => {
+    const c = mintEmailToken("confirm", ID, "ana@example.com");
+    expect((await call("unsubscribe", { method: "POST", token: c })).statusCode).toBe(400);
+    expect(statusOf("ana@example.com")).toBe("confirmed");
+    const u = mintEmailToken("unsubscribe", ID, "cho@example.com");
+    expect((await call("confirm", { method: "POST", token: u })).statusCode).toBe(400);
+    expect(statusOf("cho@example.com")).toBe("pending");
+  });
+
+  it("the pages post back to the same endpoint with the action and token", async () => {
+    const c = mintEmailToken("confirm", ID, "cho@example.com");
+    const page = await call("confirm", { method: "GET", token: c });
+    expect(page.body).toContain(
+      `action="&#x2F;api&#x2F;email?action=confirm&amp;token=${encodeURIComponent(c)}"`,
+    );
+    const u = mintEmailToken("unsubscribe", ID, "ana@example.com");
+    const page2 = await call("unsubscribe", { method: "GET", token: u });
+    expect(page2.body).toContain(
+      `action="&#x2F;api&#x2F;email?action=unsubscribe&amp;token=${encodeURIComponent(u)}"`,
+    );
   });
 });
