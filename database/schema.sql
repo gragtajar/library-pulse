@@ -59,11 +59,13 @@ CREATE INDEX idx_webhooks_webhook_id ON figma_webhooks(webhook_id);
 CREATE UNIQUE INDEX uq_webhooks_context ON figma_webhooks(context_id);
 
 -- ────────────────────────────────────────────────
--- 4. Core config: file → Slack channel mapping
+-- 4. Core config: file → destination (Slack channels or email addresses)
 -- ────────────────────────────────────────────────
 -- Org-shared: keyed by FILE, not user. One config per file; anyone with edit
 -- access to the file manages it. `created_by` is the original setter (only they
 -- can tear down the Figma webhook). `figma_user_id` is retained (= created_by).
+-- A config targets exactly ONE destination (migration 006): 'slack' uses
+-- slack_team_id + channels; 'email' uses email_recipients + email_timezone.
 CREATE TABLE configurations (
   id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   figma_user_id       TEXT NOT NULL,
@@ -71,8 +73,16 @@ CREATE TABLE configurations (
   figma_team_id       TEXT,                        -- unused for file-context webhooks
   figma_file_key      TEXT NOT NULL,
   figma_file_name     TEXT,
-  slack_team_id       TEXT NOT NULL REFERENCES slack_installations(slack_team_id) ON DELETE CASCADE,
+  destination         TEXT NOT NULL DEFAULT 'slack'
+                        CHECK (destination IN ('slack','email')),
+  slack_team_id       TEXT REFERENCES slack_installations(slack_team_id) ON DELETE CASCADE,
   channels            JSONB NOT NULL DEFAULT '[]',
+  -- Email destination: up to 5 addresses with double-opt-in state
+  -- [{email, status: 'pending'|'confirmed'|'unsubscribed', added_at, confirmed_at}];
+  -- only 'confirmed' addresses are ever emailed. The timezone is the IANA zone
+  -- of the editor who saved the list (publish times are rendered in it).
+  email_recipients    JSONB NOT NULL DEFAULT '[]',
+  email_timezone      TEXT,
   custom_message      TEXT,                        -- optional team note appended to every notification
   custom_mentions     JSONB NOT NULL DEFAULT '[]', -- validated picker mentions [{id,type,label}]
   is_active           BOOLEAN DEFAULT TRUE,
@@ -82,7 +92,10 @@ CREATE TABLE configurations (
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW(),
 
-  UNIQUE(figma_file_key)
+  UNIQUE(figma_file_key),
+  -- A Slack config must still name its workspace; an email config has none.
+  CONSTRAINT configurations_destination_target_check
+    CHECK (destination <> 'slack' OR slack_team_id IS NOT NULL)
 );
 
 -- ────────────────────────────────────────────────
@@ -108,14 +121,16 @@ CREATE TABLE notification_log (
   configuration_id  UUID REFERENCES configurations(id) ON DELETE SET NULL,
   figma_file_key    TEXT,
   event_type        TEXT,
-  event_key         TEXT,                      -- per-channel webhook dedupe key
-  slack_channel_id  TEXT,
+  event_key         TEXT,                      -- per-target webhook dedupe key
+  slack_channel_id  TEXT,                      -- Slack deliveries
+  recipient         TEXT,                      -- email deliveries (and confirmation sends)
   status            TEXT CHECK (status IN ('sent','failed')),
   error_message     TEXT,
   payload_summary   JSONB,
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_log_event_dedupe ON notification_log(event_key, configuration_id, slack_channel_id);
+CREATE INDEX idx_log_event_dedupe_email ON notification_log(event_key, configuration_id, recipient);
 
 -- ────────────────────────────────────────────────
 -- 7. Per-workspace Slack directory cache (channel + mention pickers)
