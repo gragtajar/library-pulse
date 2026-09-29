@@ -16,6 +16,8 @@
     { "src": "/api/slack/channels", "dest": "/api/slack/channels.js" },
     { "src": "/api/slack/mentions", "dest": "/api/slack/mentions.js" },
     { "src": "/api/figma/resolve-file", "dest": "/api/figma/resolve-file.js" },
+    { "src": "/api/email/confirm", "dest": "/api/email/confirm.js" },
+    { "src": "/api/email/unsubscribe", "dest": "/api/email/unsubscribe.js" },
     { "src": "/api/webhook", "dest": "/api/webhook.js" },
     { "src": "/api/health", "dest": "/api/health.js" }
   ],
