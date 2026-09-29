@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Email as a destination.** A file can now notify up to five email addresses
+  instead of Slack. Setup step 2 becomes "Choose where to get updates" (Slack or
+  Email; Microsoft Teams and Google Chat are listed as coming soon), and step 4
+  asks for channels or addresses accordingly. Addresses are validated as they
+  are typed, with a live `N/5` counter. Each address confirms by email before it
+  receives anything (double opt-in), every email has an unsubscribe link and
+  one-click unsubscribe headers, and the publish time is shown in the time zone
+  of the editor who saved the list. Any editor of the file can change the list.
+  Sent through Amazon SES. Requires `database/migrations/006-email-destination.sql`
+  and the `SES_*` / `EMAIL_*` environment variables. Existing Slack
+  configurations are unchanged.
+
 ### Fixed
 
 - **"error (open-url) missing or invalid url field" on Connect Slack.** In the
