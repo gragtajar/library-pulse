@@ -1,6 +1,6 @@
 # Architecture
 
-> Last updated: 2026-07-17
+> Last updated: 2026-09-29
 
 This document covers the high-level design of Library Pulse — the three runtime components, the data flow on each end-user action, and the security boundaries you cross moving between them.
 
@@ -24,6 +24,7 @@ flowchart LR
         Status["/api/auth-status"]
         Config["/api/config"]
         SlackChannels["/api/slack/channels"]
+        EmailLinks["/api/email/confirm · unsubscribe"]
         ResolveFile["/api/figma/resolve-file"]
         Webhook["/api/webhook"]
         Health["/api/health"]
@@ -35,6 +36,8 @@ flowchart LR
 
     Browser["End-user browser"]
     SlackAPI["Slack API"]
+    SES["Amazon SES"]
+    Recipient["Email recipient's browser"]
     FigmaAPI["Figma API"]
 
     UI -- fetch + Bearer session --> AuthSlack & AuthFigma & Status & Config & SlackChannels & ResolveFile
@@ -42,12 +45,15 @@ flowchart LR
     Plugin -- openExternal --> Browser
     Browser -- redirect --> AuthSlack
     Browser -- redirect --> AuthFigma
-    AuthSlack & AuthFigma & Status & Config & Webhook --> SB
+    AuthSlack & AuthFigma & Status & Config & Webhook & EmailLinks --> SB
+    Recipient -- signed link --> EmailLinks
+    Config -- confirmation email --> SES
     AuthSlack -- code-for-token --> SlackAPI
     AuthFigma -- code-for-token --> FigmaAPI
     Config -- register webhook --> FigmaAPI
     FigmaAPI -- LIBRARY_PUBLISH --> Webhook
     Webhook -- chat.postMessage --> SlackAPI
+    Webhook -- SendEmail --> SES
 ```
 
 The system has **three runtimes** with disjoint trust models:
@@ -56,9 +62,9 @@ The system has **three runtimes** with disjoint trust models:
 
 2. **Figma plugin UI iframe** (`figma-plugin/ui.html`) — a `srcdoc` iframe rendered by Figma. Has DOM and `fetch`, but origin is `null`. The only network destinations it can reach are the ones listed in `manifest.json`'s `networkAccess.allowedDomains`.
 
-3. **Vercel serverless backend** (`backend/api/*.js`) — Node 22 ESM. Holds the Slack/Figma client secrets and the AES encryption key. Talks to Supabase and to upstream Slack/Figma APIs.
+3. **Vercel serverless backend** (`backend/api/*.js`) — Node 22 ESM. Holds the Slack/Figma client secrets, the SES sending credentials and the AES encryption key. Talks to Supabase and to the upstream Slack, Figma and Amazon SES APIs.
 
-The end-user browser is involved only during OAuth — it never sees an API call from the plugin.
+The end-user browser is involved only during OAuth — it never sees an API call from the plugin. An email recipient's browser only ever opens the two link pages (`/api/email/confirm`, `/api/email/unsubscribe`).
 
 ---
 
@@ -82,6 +88,8 @@ End user clicks "Connect Slack" in plugin UI
 
 Figma OAuth is structurally identical (different scopes, different upstream URL, different table).
 
+The email destination has no OAuth. Saving a list of addresses stores each new one as `pending` and sends it a confirmation email; the recipient's click on **Confirm address** (`POST /api/email/confirm`, authorized by the signed token in the link) flips it to `confirmed`.
+
 ---
 
 ## 3. Data flow: publish event
@@ -96,11 +104,20 @@ User publishes a library in Figma
    5. Backend INSERTs into webhook_events (UNIQUE) — duplicate → 200 OK, no-op
    6. Backend SELECTs configurations WHERE figma_file_key = payload.file_key
                                     AND is_active = true
-   7. For each config:
+   7. For each config, by destination:
+      Slack
       a. Decrypt the Slack bot_token
       b. Build the Block Kit message (slack-blocks.js)
       c. POST chat.postMessage for each channel
          (concurrency capped at SLACK_POST_CONCURRENCY = 4)
+      d. INSERT result into notification_log
+      Email
+      a. Take the addresses whose status is "confirmed"
+      b. Skip any already sent this event (notification_log.recipient),
+         then apply the per-file daily cap
+      c. Build the email (email-message.js) with that recipient's own
+         unsubscribe link, and SendEmail through Amazon SES, one recipient
+         per call (concurrency capped at 4)
       d. INSERT result into notification_log
    8. Return { status: "processed", results: [...] }
 ```
@@ -117,6 +134,8 @@ Configuration is **org-shared per file**: there is one config and one webhook pe
 | Plugin UI → backend              | UI controls the body               | Require an HMAC-signed `Authorization: Bearer` session token (bound to the Figma user id); for a file's shared config, trust the setter and verify other users' file access via `webhooks:read` |
 | Figma webhook → `/api/webhook`   | Anyone can POST                    | Hard-require `webhook_id` + passcode header, `timingSafeEqual` compare, dedupe via `webhook_events` UNIQUE                                                                                      |
 | Backend → Slack                  | Bot token is in env once decrypted | `fetchWithTimeout(8s)`, bounded concurrency, never log token                                                                                                                                    |
+| Backend → Amazon SES             | IAM key limited to sending         | Explicit `SES_*` credentials (never the ambient `AWS_*`), one attempt with 3 s connect / 5 s request timeouts, one recipient per call, addresses masked in logs                                 |
+| Recipient → `/api/email/*`       | Anyone can open the URL            | HMAC-signed token bound to one config + one address (confirm links expire in 7 days); `GET` only renders, `POST` acts; escaped HTML under a no-script CSP                                       |
 | Backend → Supabase               | Service-role key bypasses RLS      | RLS still enabled in case the key leaks; structured logs scrub tokens                                                                                                                           |
 
 The encryption key (`ENCRYPTION_KEY`) is the single root of secret in the system. If it leaks, every stored OAuth token must be revoked at the providers. See [`docs/runbooks/rotate-encryption-key.md`](./docs/runbooks/rotate-encryption-key.md).
@@ -154,6 +173,7 @@ library-pulse/
 | Package                                | Why                                                                    |
 | -------------------------------------- | ---------------------------------------------------------------------- |
 | `@supabase/supabase-js`                | Postgres client + service-role auth                                    |
+| `@aws-sdk/client-sesv2`                | Sending email through Amazon SES (request signing included)            |
 | `node:crypto`                          | AES-256-GCM + `timingSafeEqual` for the webhook passcode               |
 | `ajv`                                  | JSON Schema validation for `manifest.json` in CI                       |
 | `eslint` v9 + plugins                  | Code quality; flat config per v2 §T2                                   |
@@ -168,7 +188,7 @@ We deliberately have **zero runtime web frameworks** — every endpoint is a def
 
 ## 7. Performance budget
 
-The Slack post path is the only one that runs under load.
+The delivery path (Slack posts or emails) is the only one that runs under load. An email config sends at most five messages per publish, in two batches, each bounded by the SES timeouts above.
 
 | Stage                                       | Target                                           |
 | ------------------------------------------- | ------------------------------------------------ |
@@ -186,7 +206,7 @@ Vercel's `maxDuration: 15` is the safety net. If we ever need a longer one (larg
 - **Logs:** every backend module imports `lib/logger.js`. One JSON line per event; secrets are redacted by key name (`token`, `secret`, `passcode`, …).
 - **Vercel:** function logs flow to the Vercel dashboard. Filter by `event` to see e.g. `webhook_duplicate_skipped` rates.
 - **Sentry:** see [`docs/runbooks/incident-response.md`](./docs/runbooks/incident-response.md) for wiring once the project is ready.
-- **`notification_log`:** every Slack post (success or failure) gets a row. Use it to find which channel a config keeps failing in.
+- **`notification_log`:** every Slack post and every email, including confirmation emails (`event_type = 'EMAIL_CONFIRM'`), gets a row, success or failure. Use it to find which channel or recipient a config keeps failing for; `error_message` holds the Slack error or the SES error name.
 
 ---
 

@@ -1,8 +1,8 @@
 # Security policy
 
-Library Pulse is a Figma plugin that posts a Slack message when a Figma library is
-published. This document describes how it protects data, and how to report a
-vulnerability.
+Library Pulse is a Figma plugin that posts a Slack message, or sends an email, when a
+Figma library is published. This document describes how it protects data, and how to
+report a vulnerability.
 
 ## Reporting a vulnerability
 
@@ -39,6 +39,10 @@ rather stay anonymous.
   `users:read`, `usergroups:read` — used to post notifications to the channels the
   user chooses, to list a workspace's channels for the picker, and to list member /
   user-group names for the custom-note mention picker. Message content is never read.
+- **Email:** the plugin connects to no mail account and reads no mailbox. For a file
+  that uses the email destination, it stores the addresses an editor types (at most
+  five per file) and sends to them through Amazon SES, only after each address has
+  confirmed (see "Email consent" below).
 
 ## Org-shared, per-file access control
 
@@ -54,6 +58,27 @@ manages that file's single shared config. The backend enforces this as follows:
 - **Creating** the webhook is edit-gated by Figma for free (`POST /v2/webhooks`
   requires "Can edit"). Only the original setter can **remove** the Figma connection
   (delete the webhook); any editor can edit channels or disable notifications.
+
+## Email consent
+
+- **Double opt-in.** A newly added address is stored as _pending_ and is sent one
+  confirmation email. It receives notifications only after its owner opens that
+  email and presses **Confirm address**. Editors cannot mark an address confirmed.
+- **Unsubscribe.** Every notification has an unsubscribe link and RFC 8058 one-click
+  unsubscribe headers. Unsubscribing takes effect immediately and is sticky: an
+  editor re-saving the list does not undo it. To receive updates again the address
+  has to be removed and added back, which sends a new confirmation its owner can
+  ignore.
+- **Links are credentials, and they are narrow.** Confirm and unsubscribe links carry
+  an HMAC-SHA256 token (signing key derived from `ENCRYPTION_KEY` under its own
+  label, so session tokens and link tokens never validate each other) bound to one
+  config and one address. Confirm links expire after 7 days. A link can only confirm
+  or unsubscribe that one address; it gives no access to the config.
+- **Link scanners can't act.** Both pages only act on a button press (`POST`). A mail
+  gateway that follows links (`GET`) gets the page and changes nothing.
+- **Limits.** At most 5 addresses per file, 3 confirmation emails per address per
+  day, and 150 notification emails per file per day. When a limit can't be checked
+  (database error), nothing is sent.
 
 ## How authentication works
 
@@ -82,7 +107,10 @@ manages that file's single shared config. The backend enforces this as follows:
 | Webhook tenant isolation | A validated webhook can only post to the configuration owned by the user who registered it, for the exact file it was registered on                                      |
 | OAuth replay             | `auth_sessions.used_at` is set atomically on first use; later callbacks are rejected; sessions expire after 10 minutes                                                   |
 | Webhook replay / retries | Per-channel delivery de-duplication keyed on the derived event id (`notification_log.event_key`): a Figma retry re-sends only the channels that hadn't already succeeded |
-| Secrets in logs          | Structured logs scrub token/secret/passcode fields by key name                                                                                                           |
+| Secrets in logs          | Structured logs scrub token/secret/passcode fields by key name; email addresses are masked (`a***@example.com`)                                                          |
+| Unwanted email           | Double opt-in per address, sticky unsubscribe, signed single-purpose links, per-address and per-file sending limits (see "Email consent")                                |
+| Email retries            | Per-recipient delivery de-duplication on the same event id (`notification_log.recipient`), since Amazon SES has no idempotency token                                     |
+| Content injection        | Every user-controlled value in an email or on a confirm/unsubscribe page is HTML-escaped; the pages ship a CSP with no scripts                                           |
 
 ## Data we store & privacy
 
@@ -92,12 +120,18 @@ manages that file's single shared config. The backend enforces this as follows:
 - **In the backend** (Postgres on Supabase, serverless API on Vercel): the Figma user
   id, the selected file key and file name, the chosen Slack channel IDs, and the OAuth
   tokens — tokens encrypted at rest with AES-256-GCM. **No file contents are stored.**
+- **For the email destination:** the addresses entered for a file, each with its state
+  (pending, confirmed, unsubscribed) and the time it was added and confirmed; the time
+  zone of the editor who saved the list; and, in the delivery log, which address each
+  email was sent to and whether it succeeded. Addresses are visible to everyone who can
+  edit that file. They are used only to send that file's notifications and are passed
+  to Amazon SES for delivery.
 - **Access** is limited to the maintainer, only via the Supabase service-role key held
   in a server environment variable; Row-Level Security is enabled on all tables. The
   data is never sold or shared and is used solely to deliver the user's own Slack
   notifications.
 - **Deletion:** removing a configuration in the plugin deletes the corresponding
-  database row and tears down the Figma webhook. Data requests: rajatgarg1809@gmail.com.
+  database row and tears down the Figma webhook. Removing an address from a file's list, or switching the file to Slack, deletes it from the configuration. Delivery-log rows keep the address they were sent to; the optional cleanup job in `database/schema.sql` (`gc-notification-log`) deletes rows older than 90 days when it is enabled. Data requests: rajatgarg1809@gmail.com.
 
 ## Infrastructure & compliance
 
@@ -105,6 +139,7 @@ The backend runs on providers that maintain independent audits:
 
 - **Vercel** (serverless functions) — SOC 2 Type II and ISO 27001:2022.
 - **Supabase** (Postgres database) — SOC 2 Type II.
+- **Amazon SES** (email delivery, only for files that use the email destination) — an AWS service. AWS publishes which services each of its compliance programs covers at [aws.amazon.com/compliance/services-in-scope](https://aws.amazon.com/compliance/services-in-scope/).
 
 Library Pulse itself is an independent, solo-maintained project and is not separately
 audited; OAuth tokens are additionally encrypted at rest by the application on top of
