@@ -68,7 +68,7 @@
          One visible focus treatment for everything the input rule doesn't
          already cover. Outline (not box-shadow) so it survives any button
          fill, with an offset gap so blue-on-blue stays visible. */
-      :is(textarea, .btn, .channel-pill .remove):focus-visible {
+      :is(textarea, .btn, .channel-pill .remove, .dest-option):focus-visible {
         outline: 2px solid var(--figma-color-bg-brand, #0d99ff);
         outline-offset: 1px;
       }
@@ -124,6 +124,13 @@
       .badge-danger {
         background: var(--lp-danger-bg);
         color: var(--lp-danger);
+      }
+      /* A state that needs no attention (e.g. an unsubscribed address):
+         outlined, so it stays visible on the card's secondary surface. */
+      .badge-neutral {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px var(--figma-color-border, #c9c9c9);
+        color: var(--figma-color-text-secondary, #666);
       }
 
       /* ── Buttons ── */
@@ -298,6 +305,41 @@
         margin: -2px 0 8px;
       }
 
+      /* ── Plain multi-line field (email addresses) ──
+         Same box as the single-line inputs; the counter and error sit
+         directly under it, the hint after them. It grows with its content
+         (see autosizeEmailInput), so there is no manual resize handle. */
+      .field-textarea {
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        font-family: inherit;
+        font-size: 12px;
+        line-height: 1.5;
+        border: 1px solid var(--figma-color-border, #c9c9c9);
+        border-radius: 6px;
+        background: var(--figma-color-bg, #fff);
+        color: var(--figma-color-text, #333);
+        resize: none;
+      }
+      .field-textarea[aria-invalid="true"] {
+        border-color: var(--lp-danger);
+      }
+      .field-count {
+        font-size: 11px;
+        color: var(--figma-color-text-secondary, #666);
+        margin-top: 4px;
+      }
+      .field-count.over {
+        color: var(--lp-danger);
+      }
+      .field-error {
+        font-size: 11px;
+        color: var(--lp-danger);
+        margin-top: 3px;
+        overflow-wrap: anywhere;
+      }
+
       /* ── Team-note composer: textarea over a highlight backdrop ──
          The textarea stays a real textarea (native caret, selection, undo,
          IME, paste) with a transparent background; the backdrop behind it
@@ -461,6 +503,76 @@
         font-family: var(--lp-mono);
       }
 
+      /* ── Destination picker (step 2) ──
+         A one-of-N choice as a radio group of cards. The chosen card takes
+         the file card's selected treatment (brand border + tint), so "this
+         one is picked" reads the same everywhere. Destinations that aren't
+         available yet stay legible but quiet: secondary text, no hover. */
+      .dest-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .dest-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        padding: 8px 10px;
+        font: inherit;
+        text-align: left;
+        color: var(--figma-color-text, #333);
+        background: var(--figma-color-bg, #fff);
+        border: 1px solid var(--figma-color-border, #c9c9c9);
+        border-radius: 6px;
+        cursor: pointer;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+      }
+      .dest-option:hover:not(:disabled):not([aria-checked="true"]) {
+        background: var(--figma-color-bg-hover, #f0f0f0);
+      }
+      .dest-option[aria-checked="true"] {
+        border-color: var(--figma-color-bg-brand, #0d99ff);
+        background: var(--lp-selected-tint);
+      }
+      /* Not available (yet): recessed onto the secondary surface with no
+         outline, so it reads as part of the panel rather than a control. */
+      .dest-option:disabled {
+        cursor: not-allowed;
+        color: var(--figma-color-text-secondary, #666);
+        background: var(--figma-color-bg-secondary, #f5f5f5);
+        border-color: transparent;
+      }
+      .dest-icon {
+        display: inline-flex;
+        flex-shrink: 0;
+        color: var(--figma-color-text-secondary, #666);
+      }
+      .dest-text {
+        min-width: 0;
+      }
+      .dest-name,
+      .dest-meta {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .dest-name {
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .dest-option:disabled .dest-name {
+        font-weight: 400;
+      }
+      .dest-meta {
+        font-size: 11px;
+        color: var(--figma-color-text-secondary, #666);
+      }
+
       /* ── Spinner ── */
       .spinner {
         width: 16px;
@@ -560,6 +672,28 @@
         white-space: normal;
         margin-top: 2px;
       }
+      /* Email recipients: one address per line with its confirmation state. */
+      .recipient-list {
+        list-style: none;
+        margin-top: 2px;
+      }
+      .recipient-list li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 3px 0;
+      }
+      .recipient-list .addr {
+        min-width: 0;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .recipient-list .badge {
+        flex-shrink: 0;
+      }
 
       /* ── Connection steps ── */
       .step {
@@ -645,7 +779,7 @@
       <!--  SETUP VIEW                             -->
       <!-- ════════════════════════════════════════ -->
       <div id="view-setup" class="view">
-        <p class="subtitle">Get Slack notifications when your Figma library is published.</p>
+        <p class="subtitle">Get Slack or email updates when your Figma library is published.</p>
 
         <!-- Figma account — connected automatically from your Figma login -->
         <div class="step" id="figma-banner">
@@ -669,43 +803,172 @@
           </div>
         </div>
 
-        <!-- Step 2: Connect Slack -->
-        <div class="step" id="step-slack">
-          <div class="step-num pending" id="step-slack-num">2</div>
+        <!-- Step 2: Choose the destination — one per file. Slack and email
+             today; the two "Coming soon" cards mark where Microsoft Teams and
+             Google Chat will land. -->
+        <div class="step" id="step-dest">
+          <div class="step-num pending" id="step-dest-num">2</div>
           <div class="step-content">
-            <div class="step-title">Connect Slack</div>
-            <div class="step-desc">
-              Authorize Library Pulse to post messages to your Slack workspace.
+            <div class="step-title" id="dest-title">Choose where to get updates</div>
+            <div class="step-desc">Pick one. You can switch later.</div>
+
+            <div class="dest-grid" id="dest-grid" role="radiogroup" aria-labelledby="dest-title">
+              <button
+                type="button"
+                class="dest-option"
+                role="radio"
+                aria-checked="false"
+                data-dest="slack"
+                disabled
+              >
+                <span class="dest-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path
+                      d="M3.36 10.04a1.68 1.68 0 1 1-1.68-1.68h1.68v1.68zm.84 0a1.68 1.68 0 1 1 3.36 0v4.28a1.68 1.68 0 1 1-3.36 0v-4.28z"
+                      fill="#E01E5A"
+                    />
+                    <path
+                      d="M5.96 3.36a1.68 1.68 0 1 1 1.68-1.68v1.68H5.96zm0 .84a1.68 1.68 0 0 1 0 3.36H1.68a1.68 1.68 0 0 1 0-3.36h4.28z"
+                      fill="#36C5F0"
+                    />
+                    <path
+                      d="M12.64 5.96a1.68 1.68 0 1 1 1.68 1.68h-1.68V5.96zm-.84 0a1.68 1.68 0 0 1-3.36 0V1.68a1.68 1.68 0 0 1 3.36 0v4.28z"
+                      fill="#2EB67D"
+                    />
+                    <path
+                      d="M10.04 12.64a1.68 1.68 0 1 1-1.68 1.68v-1.68h1.68zm0-.84a1.68 1.68 0 0 1 0-3.36h4.28a1.68 1.68 0 0 1 0 3.36h-4.28z"
+                      fill="#ECB22E"
+                    />
+                  </svg>
+                </span>
+                <span class="dest-text">
+                  <span class="dest-name">Slack</span>
+                  <span class="dest-meta">Up to 3 channels</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                class="dest-option"
+                role="radio"
+                aria-checked="false"
+                data-dest="email"
+                disabled
+              >
+                <span class="dest-icon" aria-hidden="true">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.4"
+                    stroke-linejoin="round"
+                  >
+                    <rect x="1.8" y="3.3" width="12.4" height="9.4" rx="1.6" />
+                    <path d="M2.4 4.7 8 8.9l5.6-4.2" />
+                  </svg>
+                </span>
+                <span class="dest-text">
+                  <span class="dest-name">Email</span>
+                  <span class="dest-meta">Up to 5 addresses</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                class="dest-option"
+                role="radio"
+                aria-checked="false"
+                data-dest="teams"
+                data-soon="1"
+                disabled
+              >
+                <span class="dest-icon" aria-hidden="true">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.4"
+                    stroke-linecap="round"
+                  >
+                    <circle cx="5.8" cy="5.4" r="2.3" />
+                    <path d="M1.9 13.2c.4-2.6 1.9-4 3.9-4s3.5 1.4 3.9 4" />
+                    <circle cx="11.6" cy="5.9" r="1.9" />
+                    <path d="M11.2 9.4c1.6.1 2.8 1.3 3.1 3.6" />
+                  </svg>
+                </span>
+                <span class="dest-text">
+                  <span class="dest-name">Microsoft Teams</span>
+                  <span class="dest-meta">Coming soon</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                class="dest-option"
+                role="radio"
+                aria-checked="false"
+                data-dest="gchat"
+                data-soon="1"
+                disabled
+              >
+                <span class="dest-icon" aria-hidden="true">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.4"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M2.2 3.6A1.6 1.6 0 0 1 3.8 2h8.4a1.6 1.6 0 0 1 1.6 1.6v5.8a1.6 1.6 0 0 1-1.6 1.6H7.3l-2.9 2.6V11h-.6a1.6 1.6 0 0 1-1.6-1.6z"
+                    />
+                  </svg>
+                </span>
+                <span class="dest-text">
+                  <span class="dest-name">Google Chat</span>
+                  <span class="dest-meta">Coming soon</span>
+                </span>
+              </button>
             </div>
-            <button
-              class="btn btn-secondary"
-              id="btn-connect-slack"
-              onclick="connectSlack()"
-              disabled
-            >
-              <!-- Official Slack mark: same limb geometry as before, now with
+
+            <div class="hint" id="email-connect-note" style="display: none; margin-top: 0">
+              Nothing to connect. You'll add the addresses in step 4.
+            </div>
+
+            <div id="slack-connect" style="display: none">
+              <button
+                class="btn btn-secondary"
+                id="btn-connect-slack"
+                onclick="connectSlack()"
+                disabled
+              >
+                <!-- Official Slack mark: same limb geometry as before, now with
                    the brand's four fills instead of a mono recolor. -->
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path
-                  d="M3.36 10.04a1.68 1.68 0 1 1-1.68-1.68h1.68v1.68zm.84 0a1.68 1.68 0 1 1 3.36 0v4.28a1.68 1.68 0 1 1-3.36 0v-4.28z"
-                  fill="#E01E5A"
-                />
-                <path
-                  d="M5.96 3.36a1.68 1.68 0 1 1 1.68-1.68v1.68H5.96zm0 .84a1.68 1.68 0 0 1 0 3.36H1.68a1.68 1.68 0 0 1 0-3.36h4.28z"
-                  fill="#36C5F0"
-                />
-                <path
-                  d="M12.64 5.96a1.68 1.68 0 1 1 1.68 1.68h-1.68V5.96zm-.84 0a1.68 1.68 0 0 1-3.36 0V1.68a1.68 1.68 0 0 1 3.36 0v4.28z"
-                  fill="#2EB67D"
-                />
-                <path
-                  d="M10.04 12.64a1.68 1.68 0 1 1-1.68 1.68v-1.68h1.68zm0-.84a1.68 1.68 0 0 1 0-3.36h4.28a1.68 1.68 0 0 1 0 3.36h-4.28z"
-                  fill="#ECB22E"
-                />
-              </svg>
-              Connect to Slack
-            </button>
-            <div id="slack-status" style="margin-top: 8px"></div>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path
+                    d="M3.36 10.04a1.68 1.68 0 1 1-1.68-1.68h1.68v1.68zm.84 0a1.68 1.68 0 1 1 3.36 0v4.28a1.68 1.68 0 1 1-3.36 0v-4.28z"
+                    fill="#E01E5A"
+                  />
+                  <path
+                    d="M5.96 3.36a1.68 1.68 0 1 1 1.68-1.68v1.68H5.96zm0 .84a1.68 1.68 0 0 1 0 3.36H1.68a1.68 1.68 0 0 1 0-3.36h4.28z"
+                    fill="#36C5F0"
+                  />
+                  <path
+                    d="M12.64 5.96a1.68 1.68 0 1 1 1.68 1.68h-1.68V5.96zm-.84 0a1.68 1.68 0 0 1-3.36 0V1.68a1.68 1.68 0 0 1 3.36 0v4.28z"
+                    fill="#2EB67D"
+                  />
+                  <path
+                    d="M10.04 12.64a1.68 1.68 0 1 1-1.68 1.68v-1.68h1.68zm0-.84a1.68 1.68 0 0 1 0-3.36h4.28a1.68 1.68 0 0 1 0 3.36h-4.28z"
+                    fill="#ECB22E"
+                  />
+                </svg>
+                Connect to Slack
+              </button>
+              <div id="slack-status" style="margin-top: 8px"></div>
+            </div>
           </div>
         </div>
 
@@ -739,45 +1002,79 @@
           </div>
         </div>
 
-        <!-- Step 4: Add channels -->
+        <!-- Step 4: The destination's targets — Slack channels or email
+             addresses, whichever step 2 chose. -->
         <div class="step" id="step-channels">
           <div class="step-num pending" id="step-channels-num">4</div>
           <div class="step-content">
             <div class="step-title">
-              Add Slack channels
-              <span style="font-weight: 400; color: var(--figma-color-text-tertiary, #b3b3b3)"
-                >(1–3)</span
-              >
+              <span id="step-targets-name">Add channels or addresses</span>
+              <span
+                id="step-targets-range"
+                style="font-weight: 400; color: var(--figma-color-text-secondary, #666)"
+              ></span>
             </div>
-            <div class="step-desc">Choose where publish notifications get posted.</div>
+            <div class="step-desc" id="step-targets-desc">
+              Depends on the destination you choose in step 2.
+            </div>
 
             <div id="config-form" style="opacity: 0.5; pointer-events: none">
-              <div class="channels-list" id="channels-list"></div>
-              <div
-                class="channel-count"
-                id="channel-count"
-                aria-live="polite"
-                style="display: none"
-              ></div>
-
-              <div class="channel-picker" id="channel-picker">
+              <div id="email-panel" style="display: none">
                 <div class="input-group" style="margin-bottom: 0">
-                  <input
-                    type="text"
-                    id="channel-search"
-                    placeholder="Search channels…"
+                  <label for="email-input">Email addresses</label>
+                  <textarea
+                    class="field-textarea"
+                    id="email-input"
+                    rows="3"
+                    spellcheck="false"
                     autocomplete="off"
-                  />
+                    autocapitalize="off"
+                    aria-describedby="email-count email-error email-hint"
+                    placeholder="name@company.com, one per line or separated by commas"
+                  ></textarea>
                 </div>
-                <div class="channel-dropdown" id="channel-dropdown" style="display: none"></div>
-              </div>
-              <div class="hint" id="channels-hint" style="margin-top: 4px">
-                Pick up to 3 channels. Private channels appear only if the Library Pulse bot has
-                been added to them.
+                <div class="field-count" id="email-count" aria-live="polite">0/5 addresses</div>
+                <div class="field-error" id="email-error" role="alert" style="display: none"></div>
+                <div class="hint" id="email-hint" style="margin-top: 6px">
+                  Each address gets a confirmation email and receives updates once it's confirmed.
+                  Any editor of this file can change this list.
+                </div>
+                <div class="hint" id="email-tz-hint"></div>
               </div>
 
-              <!-- Custom message (optional, org-shared) with @-mention composer -->
-              <div class="input-group" style="margin-top: 14px; margin-bottom: 0">
+              <div id="slack-panel" style="display: none">
+                <div class="channels-list" id="channels-list"></div>
+                <div
+                  class="channel-count"
+                  id="channel-count"
+                  aria-live="polite"
+                  style="display: none"
+                ></div>
+
+                <div class="channel-picker" id="channel-picker">
+                  <div class="input-group" style="margin-bottom: 0">
+                    <input
+                      type="text"
+                      id="channel-search"
+                      placeholder="Search channels…"
+                      autocomplete="off"
+                    />
+                  </div>
+                  <div class="channel-dropdown" id="channel-dropdown" style="display: none"></div>
+                </div>
+                <div class="hint" id="channels-hint" style="margin-top: 4px">
+                  Pick up to 3 channels. Private channels appear only if the Library Pulse bot has
+                  been added to them.
+                </div>
+              </div>
+
+              <!-- Custom message (optional, org-shared). On Slack it is an
+                   @-mention composer; on email it is a plain note. -->
+              <div
+                class="input-group"
+                id="note-group"
+                style="display: none; margin-top: 14px; margin-bottom: 0"
+              >
                 <label for="custom-message">Custom message (optional)</label>
                 <div class="channel-picker" id="mention-picker">
                   <div
@@ -852,9 +1149,17 @@
             <span class="dash-label">Destination</span>
             <span class="dash-value" id="dash-slack-workspace">—</span>
           </div>
-          <div class="dash-row">
+          <div class="dash-row" id="dash-channels-row">
             <span class="dash-label">Channels</span>
             <span class="dash-value" id="dash-channels">—</span>
+          </div>
+          <div class="dash-row dash-row-stack" id="dash-recipients-row" style="display: none">
+            <span class="dash-label">Recipients</span>
+            <ul class="recipient-list" id="dash-recipients"></ul>
+          </div>
+          <div class="dash-row" id="dash-timezone-row" style="display: none">
+            <span class="dash-label">Time zone</span>
+            <span class="dash-value" id="dash-timezone"></span>
           </div>
           <div class="dash-row dash-row-stack" id="dash-note-row" style="display: none">
             <span class="dash-label">Team note</span>
@@ -877,7 +1182,9 @@
       </div>
       <div id="footer-dashboard" class="footer-group" style="display: none">
         <div class="btn-row">
-          <button class="btn btn-secondary" onclick="editConfig()">Edit channels</button>
+          <button class="btn btn-secondary" id="btn-edit-config" onclick="editConfig()">
+            Edit channels
+          </button>
           <button class="btn btn-secondary" id="btn-toggle-active" onclick="toggleActive()">
             Disable
           </button>
@@ -903,6 +1210,34 @@
       // Keep in sync with backend/lib/validators.js SLACK_CHANNEL_ID.
       const SLACK_CHANNEL_ID_RE = /^(C|G|D|MP)[A-Z0-9]{6,20}$/;
 
+      // Email destination: at most this many addresses per file. Keep in sync
+      // with backend/lib/validators.js EMAIL_RECIPIENTS_MAX.
+      const EMAIL_MAX = 5;
+
+      // Step 4's copy per destination (step 2 decides which one shows; "none"
+      // is first-time setup before a destination is picked).
+      const TARGETS_COPY = {
+        none: {
+          name: "Add channels or addresses",
+          range: "",
+          desc: "Depends on the destination you choose in step 2.",
+          notePlaceholder: "",
+        },
+        slack: {
+          name: "Add Slack channels",
+          range: "(1–3)",
+          desc: "Choose where publish notifications get posted.",
+          notePlaceholder:
+            "Posted with every notification. Type @ and pick from the list to mention people or groups.",
+        },
+        email: {
+          name: "Add email addresses",
+          range: "(1–5)",
+          desc: "Choose who gets an email when the library is published.",
+          notePlaceholder: "Included in every email.",
+        },
+      };
+
       // Inline icons for the pickers (static markup, currentColor stroke) —
       // replaces the lock/users emoji so all picker glyphs share one family.
       const ICON_LOCK =
@@ -927,6 +1262,8 @@
         fileKey: null,
         fileName: null,
         currentUser: null,
+        // "slack" | "email" | null (nothing chosen yet in first-time setup).
+        destination: null,
         slackConnected: false,
         slackTeamId: null,
         slackTeamName: null,
@@ -1017,6 +1354,8 @@
           app.slackConnected = true;
           app.slackTeamId = slackData.slack_team_id;
           app.slackTeamName = slackData.slack_team_name;
+          // Someone who already connected Slack here keeps it as the default.
+          app.destination = "slack";
         }
 
         if (figmaData && figmaData.session_token) {
@@ -1276,9 +1615,103 @@
         }
       }
 
+      // ── Destination (step 2) ──
+      // One destination per file. Picking Slack reveals its Connect button;
+      // email has nothing to connect, so choosing it completes the step.
+      function selectDestination(dest) {
+        if ((dest !== "slack" && dest !== "email") || !app.figmaConnected) return;
+        if (app.destination === dest) return;
+        app.destination = dest;
+        closeDropdown();
+        hideMentionDropdown();
+        updateSetupState();
+        if (dest === "slack") renderChannels();
+      }
+
+      // Paint step 2's radio group and everything that follows the choice:
+      // which connect affordance shows, and step 4's panel and copy.
+      function renderDestination() {
+        const options = Array.from(document.querySelectorAll("#dest-grid .dest-option"));
+        let tabStop = null;
+        for (const btn of options) {
+          const checked = btn.dataset.dest === app.destination;
+          btn.disabled = btn.dataset.soon === "1" || !app.figmaConnected;
+          btn.setAttribute("aria-checked", checked ? "true" : "false");
+          btn.tabIndex = -1;
+          if (!btn.disabled && (checked || !tabStop)) tabStop = checked ? btn : tabStop || btn;
+        }
+        // Radio-group keyboard model: one tab stop (the chosen card, or the
+        // first available one); arrow keys move between cards.
+        const chosen = options.find((b) => !b.disabled && b.dataset.dest === app.destination);
+        if (chosen || tabStop) (chosen || tabStop).tabIndex = 0;
+
+        const isEmail = app.destination === "email";
+        const isSlack = app.destination === "slack";
+        const show = (id, on) => {
+          document.getElementById(id).style.display = on ? "block" : "none";
+        };
+        show("slack-connect", isSlack);
+        show("email-connect-note", isEmail);
+        show("slack-panel", isSlack);
+        show("email-panel", isEmail);
+        // Nothing chosen yet → step 4 has nothing to ask.
+        show("note-group", isSlack || isEmail);
+
+        const copy = TARGETS_COPY[isEmail ? "email" : isSlack ? "slack" : "none"];
+        document.getElementById("step-targets-name").textContent = copy.name;
+        document.getElementById("step-targets-range").textContent = copy.range;
+        document.getElementById("step-targets-desc").textContent = copy.desc;
+        document.getElementById("custom-message").placeholder = copy.notePlaceholder;
+        document.getElementById("email-tz-hint").textContent =
+          `Publish times in emails use your time zone (${currentTimezone()}).`;
+
+        updateMentionHint();
+        renderComposerHighlights();
+        if (isEmail) renderEmailState();
+      }
+
+      function onDestinationKeydown(e) {
+        const keys = ["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"];
+        if (!keys.includes(e.key)) return;
+        const enabled = Array.from(document.querySelectorAll("#dest-grid .dest-option")).filter(
+          (b) => !b.disabled,
+        );
+        const at = enabled.indexOf(document.activeElement);
+        if (at === -1 || enabled.length < 2) return;
+        e.preventDefault();
+        const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+        const next = enabled[(at + step + enabled.length) % enabled.length];
+        selectDestination(next.dataset.dest);
+        next.focus();
+      }
+
+      // Browsers still report a few zones under the names they had before
+      // they were renamed; show (and store) the current name.
+      const ZONE_RENAMES = {
+        "Asia/Calcutta": "Asia/Kolkata",
+        "Asia/Katmandu": "Asia/Kathmandu",
+        "Asia/Saigon": "Asia/Ho_Chi_Minh",
+        "Asia/Rangoon": "Asia/Yangon",
+        "Europe/Kiev": "Europe/Kyiv",
+        "Atlantic/Faeroe": "Atlantic/Faroe",
+      };
+
+      // The zone publish times are shown in for an email config: whoever saves
+      // the list sets it, from their own browser.
+      function currentTimezone() {
+        try {
+          const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+          return Object.prototype.hasOwnProperty.call(ZONE_RENAMES, zone)
+            ? ZONE_RENAMES[zone]
+            : zone;
+        } catch (_) {
+          return "UTC";
+        }
+      }
+
       // ── Setup state management ──
       function updateSetupState() {
-        const slackNum = document.getElementById("step-slack-num");
+        const destNum = document.getElementById("step-dest-num");
         const slackBtn = document.getElementById("btn-connect-slack");
         const fileNum = document.getElementById("step-file-num");
         const channelsNum = document.getElementById("step-channels-num");
@@ -1287,22 +1720,30 @@
         // Step 1 (Connect Figma) is driven by startFigmaAuto / markFigmaConnected /
         // figmaBannerError, which own the #figma-banner-icon states.
 
-        // Step 2 — Connect Slack — unlocks only once Figma (step 1) is connected.
+        // Step 2 — destination — unlocks only once Figma (step 1) is connected.
+        // Done when email is chosen, or Slack is chosen and its workspace is
+        // connected.
+        const destReady =
+          app.destination === "email" || (app.destination === "slack" && app.slackConnected);
+        if (destReady) {
+          destNum.className = "step-num done";
+          destNum.textContent = "✓";
+        } else {
+          destNum.className = app.figmaConnected ? "step-num active" : "step-num pending";
+          destNum.textContent = "2";
+        }
         if (app.slackConnected) {
-          slackNum.className = "step-num done";
-          slackNum.textContent = "✓";
           slackBtn.textContent = `Connected to ${app.slackTeamName || "Slack"}`;
           slackBtn.disabled = true;
         } else {
-          slackNum.className = app.figmaConnected ? "step-num active" : "step-num pending";
-          slackNum.textContent = "2";
           slackBtn.disabled = !app.figmaConnected;
         }
+        renderDestination();
 
         // Step 3 — Select file — auto-satisfied once the file key is known
         // (provided directly by Figma for private installs, or resolved from
         // the file's published assets — see startFileDetection).
-        const connected = app.slackConnected && app.figmaConnected;
+        const connected = destReady && app.figmaConnected;
         const fileReady = connected && !!app.fileKey;
         fileNum.className = fileReady
           ? "step-num done"
@@ -1311,7 +1752,8 @@
             : "step-num pending";
         fileNum.textContent = fileReady ? "✓" : "3";
 
-        // Step 4 — Add channels — unlocks once the file step (step 3) is satisfied.
+        // Step 4 — channels or addresses — unlocks once the file step (step 3)
+        // is satisfied. `inert` keeps the locked form out of the tab order too.
         if (fileReady) {
           channelsNum.className = "step-num active";
           configForm.style.opacity = "1";
@@ -1321,7 +1763,118 @@
           configForm.style.opacity = "0.5";
           configForm.style.pointerEvents = "none";
         }
+        configForm.inert = !fileReady;
 
+        updateSaveButton();
+      }
+
+      // ── Email addresses (step 4, email destination) ──
+      //
+      // Same rule as the backend (backend/lib/validators.js isValidEmail —
+      // tests/email-validation-parity.test.js pins the two together): the
+      // shape browsers accept for <input type="email">, plus a dot in the
+      // domain and the usual length caps.
+      function isValidEmail(v) {
+        if (typeof v !== "string" || v.length === 0 || v.length > 254) return false;
+        const at = v.lastIndexOf("@");
+        if (at < 1 || at === v.length - 1) return false;
+        const local = v.slice(0, at);
+        const domain = v.slice(at + 1);
+        if (local.length > 64 || !/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(local)) return false;
+        const labels = domain.split(".");
+        if (labels.length < 2) return false;
+        return labels.every(
+          (label) =>
+            /^[a-zA-Z0-9-]{1,63}$/.test(label) && !label.startsWith("-") && !label.endsWith("-"),
+        );
+      }
+
+      // Split what was typed into addresses: separated by commas, semicolons
+      // or whitespace, lower-cased, duplicates counted once.
+      function parseEmailInput(text) {
+        const tokens = String(text || "")
+          .split(/[\s,;]+/)
+          .filter(Boolean);
+        const valid = [];
+        const invalid = [];
+        let duplicates = 0;
+        for (const raw of tokens) {
+          const email = raw.toLowerCase();
+          if (!isValidEmail(email)) {
+            if (!invalid.includes(raw)) invalid.push(raw);
+          } else if (valid.includes(email)) {
+            duplicates++;
+          } else {
+            valid.push(email);
+          }
+        }
+        return { valid, invalid, duplicates };
+      }
+
+      // The address being typed right now (the one under the caret), or "".
+      // It isn't judged until the user moves on — nobody wants "not a valid
+      // address" while they're halfway through typing one.
+      function tokenAtCaret(ta) {
+        if (document.activeElement !== ta || ta.selectionStart !== ta.selectionEnd) return "";
+        const caret = ta.selectionStart;
+        const before = /[^\s,;]*$/.exec(ta.value.slice(0, caret))[0];
+        const after = /^[^\s,;]*/.exec(ta.value.slice(caret))[0];
+        return before ? before + after : "";
+      }
+
+      // Counter, error line and field state for the address box.
+      function renderEmailState() {
+        const ta = document.getElementById("email-input");
+        const count = document.getElementById("email-count");
+        const error = document.getElementById("email-error");
+        if (!ta || !count || !error) return;
+
+        const parsed = parseEmailInput(ta.value);
+        const typing = tokenAtCaret(ta);
+        const flagged = parsed.invalid.filter((t) => t !== typing);
+        const n = parsed.valid.length;
+        const over = n > EMAIL_MAX;
+
+        let text = `${n}/${EMAIL_MAX} addresses`;
+        if (over) {
+          text += `. Remove ${n - EMAIL_MAX} to continue.`;
+        } else if (n === EMAIL_MAX) {
+          text += ". Remove one to add another.";
+        } else if (parsed.duplicates > 0) {
+          text += ` (${parsed.duplicates} ${parsed.duplicates === 1 ? "duplicate" : "duplicates"} counted once)`;
+        }
+        count.textContent = text;
+        count.classList.toggle("over", over);
+
+        if (flagged.length) {
+          const shown = flagged.slice(0, 3).join(", ");
+          const more = flagged.length > 3 ? ` and ${flagged.length - 3} more` : "";
+          error.textContent = `Not a valid address: ${shown}${more}`;
+          error.style.display = "block";
+        } else {
+          error.textContent = "";
+          error.style.display = "none";
+        }
+        ta.setAttribute("aria-invalid", flagged.length || over ? "true" : "false");
+        autosizeEmailInput();
+      }
+
+      // Grow the address box with what's in it, from its 3 starting lines up
+      // to 6, so a full list of five stays visible without scrolling.
+      function autosizeEmailInput() {
+        const ta = document.getElementById("email-input");
+        if (!ta || ta.offsetParent === null) return; // hidden: nothing to measure
+        const cs = getComputedStyle(ta);
+        const borders = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+        const padding = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+        const line = parseFloat(cs.lineHeight) || 18;
+        ta.style.height = "auto";
+        const wanted = ta.scrollHeight + borders;
+        ta.style.height = `${Math.min(wanted, line * 6 + padding + borders)}px`;
+      }
+
+      function onEmailInput() {
+        renderEmailState();
         updateSaveButton();
       }
 
@@ -1508,7 +2061,7 @@
           ? `Figma connected as ${name}`
           : "Figma connected";
         document.getElementById("figma-banner-desc").textContent =
-          "We'll watch your selected file and notify Slack when it's published.";
+          "We'll watch this file and send an update each time it's published.";
         document.getElementById("btn-figma-retry").style.display = "none";
         updateSetupState();
         // With a session in hand, identify the file automatically (no-op when
@@ -1601,7 +2154,10 @@
       // Which workspace the picker should query: an existing config's file, or
       // the just-connected Slack team during first-time setup.
       function channelQuery() {
-        if (app.configId)
+        // A saved EMAIL config has no workspace of its own; when it is being
+        // switched to Slack the pickers use the workspace connected here.
+        const savedOnSlack = app.configId && app.currentConfig?.destination !== "email";
+        if (savedOnSlack)
           return { key: `f:${app.fileKey}`, qs: `fileKey=${encodeURIComponent(app.fileKey)}` };
         if (app.slackTeamId)
           return {
@@ -1802,6 +2358,7 @@
       // token at delivery. Free-typed @text that was never picked stays plain
       // text (and can never ping — the backend escapes it).
       async function loadMentionDir() {
+        if (app.destination !== "slack") return; // mentions are a Slack concept
         const q = channelQuery();
         if (!q || app.mentionDirLoading) return;
         if (app.mentionDir && app.mentionDirForKey === q.key) return;
@@ -1832,6 +2389,12 @@
         const hint = document.getElementById("mention-hint");
         const reconnectBtn = document.getElementById("btn-mention-reconnect");
         if (!hint) return;
+        if (app.destination === "email") {
+          hint.textContent = "Any editor of this file can change this note.";
+          hint.style.color = "";
+          if (reconnectBtn) reconnectBtn.style.display = "none";
+          return;
+        }
         if (app.mentionDirError === "slack_reauth_required") {
           hint.textContent =
             "@mentions need Slack's updated permissions. Reconnect Slack to enable them — the note itself still works.";
@@ -1893,7 +2456,10 @@
         if (!ta || !backdrop) return;
         const text = ta.value;
         const frag = document.createDocumentFragment();
-        for (const seg of mentionSegments(text, app.customMentions)) {
+        // An email note is plain text: nothing in it pings, so nothing is
+        // painted as a token.
+        const mentions = app.destination === "email" ? [] : app.customMentions;
+        for (const seg of mentionSegments(text, mentions)) {
           const piece = text.slice(seg.start, seg.end);
           if (seg.mention) {
             const mark = document.createElement("mark");
@@ -1930,6 +2496,7 @@
       // start. Modifier deletes (word/line) and IME composition stay native.
       function deleteMentionAtCaret(e) {
         if (e.key !== "Backspace" && e.key !== "Delete") return;
+        if (app.destination === "email") return; // plain note: no tokens to delete
         if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.isComposing) return;
         const ta = e.target;
         if (ta.selectionStart !== ta.selectionEnd) return;
@@ -2106,6 +2673,7 @@
       }
 
       function onMentionInput() {
+        if (app.destination !== "slack") return hideMentionDropdown();
         if (activeMentionQuery()) {
           loadMentionDir();
           renderMentionDropdown();
@@ -2114,8 +2682,27 @@
         }
       }
 
-      // Wire the channel search box and the mention composer.
+      // Wire the destination picker, the address box, the channel search box
+      // and the mention composer.
       document.addEventListener("DOMContentLoaded", () => {
+        const grid = document.getElementById("dest-grid");
+        if (grid) {
+          grid.addEventListener("click", (e) => {
+            const btn = e.target.closest(".dest-option");
+            if (btn && !btn.disabled) selectDestination(btn.dataset.dest);
+          });
+          grid.addEventListener("keydown", onDestinationKeydown);
+        }
+
+        const emails = document.getElementById("email-input");
+        if (emails) {
+          emails.addEventListener("input", onEmailInput);
+          // Leaving the field (or moving the caret) judges what was typed.
+          emails.addEventListener("blur", renderEmailState);
+          emails.addEventListener("keyup", renderEmailState);
+          emails.addEventListener("click", renderEmailState);
+        }
+
         const search = document.getElementById("channel-search");
         if (search) {
           search.addEventListener("focus", openDropdown);
@@ -2153,47 +2740,81 @@
         if (!btn) return;
 
         const hasFile = !!app.fileKey;
-        const hasChannels = app.channels.length >= 1;
+        let targetsReady = false;
+        if (app.destination === "email") {
+          // 1–5 addresses, and nothing left in the box that isn't one.
+          const parsed = parseEmailInput(document.getElementById("email-input").value);
+          targetsReady =
+            parsed.valid.length >= 1 &&
+            parsed.valid.length <= EMAIL_MAX &&
+            parsed.invalid.length === 0;
+        } else if (app.destination === "slack") {
+          targetsReady = app.channels.length >= 1 && app.slackConnected;
+        }
 
-        btn.disabled = !(hasFile && hasChannels && app.slackConnected && app.figmaConnected);
+        btn.disabled = !(hasFile && targetsReady && app.figmaConnected);
       }
 
       // ── Save configuration ──
-      async function saveConfig() {
+      async function saveConfig(confirmedSwitch) {
         const btn = document.getElementById("btn-save");
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span> Saving…';
 
         // Editing an existing config → PUT (any edit-access user); first-time
         // setup → POST (create).
         const editing = !!app.configId;
+        const dest = app.destination;
+        const isEmail = dest === "email";
+        const savedDest = app.currentConfig
+          ? app.currentConfig.destination === "email"
+            ? "email"
+            : "slack"
+          : null;
+        const switching = editing && savedDest !== dest;
 
-        // Optional team note: plain text + the picker-chosen mentions still
-        // present in it (backend re-validates both).
+        // Moving a file to another destination removes the old one's targets
+        // for everyone who edits the file — confirm on the button itself.
+        if (switching && confirmedSwitch !== true) {
+          armConfirm(
+            btn,
+            isEmail
+              ? "Switch to email? Slack channels will be removed."
+              : "Switch to Slack? Email recipients will be removed.",
+            () => saveConfig(true),
+          );
+          return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Saving…';
+
+        // Optional team note: plain text + (Slack only) the picker-chosen
+        // mentions still present in it. The backend re-validates both.
         const noteText = (document.getElementById("custom-message")?.value || "").trim();
-        const noteMentions = noteText ? pruneMentions(noteText) : [];
+        const noteMentions = noteText && !isEmail ? pruneMentions(noteText) : [];
+
+        const body = { fileKey: app.fileKey, destination: dest };
+        if (!editing) {
+          body.figmaUserId = app.currentUser?.id;
+          body.fileName = app.fileName;
+        }
+        if (isEmail) {
+          body.emailRecipients = parseEmailInput(
+            document.getElementById("email-input").value,
+          ).valid;
+          body.timezone = currentTimezone();
+        } else {
+          // The workspace is named at creation and when a file moves to Slack;
+          // an ordinary edit never changes it.
+          if (!editing || switching) body.slackTeamId = app.slackTeamId;
+          body.channels = app.channels;
+        }
+        body.customMessage = noteText || null;
+        body.customMentions = noteMentions;
 
         try {
           const res = await api(`/api/config`, {
             method: editing ? "PUT" : "POST",
-            body: JSON.stringify(
-              editing
-                ? {
-                    fileKey: app.fileKey,
-                    channels: app.channels,
-                    customMessage: noteText || null,
-                    customMentions: noteMentions,
-                  }
-                : {
-                    figmaUserId: app.currentUser?.id,
-                    fileKey: app.fileKey,
-                    fileName: app.fileName,
-                    slackTeamId: app.slackTeamId,
-                    channels: app.channels,
-                    customMessage: noteText || null,
-                    customMentions: noteMentions,
-                  },
-            ),
+            body: JSON.stringify(body),
           });
 
           if (!res.ok) {
@@ -2209,13 +2830,45 @@
 
           const config = await readJson(res);
           setStorage("config_id", config.id);
-          notify(editing ? "Channels updated." : "Configuration saved! Notifications are active.");
+          const said = savedMessage(editing, isEmail, config.emailConfirmations);
+          notify(said.text, said.isError);
           showSharedConfig(config, config.isOwner === true);
         } catch (e) {
           btn.disabled = false;
           setSaveLabel();
           notify(e.message, true);
         }
+      }
+
+      // What to tell the user after a save. For email that includes what
+      // happened to the confirmation emails for newly added addresses
+      // (`sent` went out, `failed` couldn't be sent, `skipped` hit the daily
+      // per-address limit).
+      function savedMessage(editing, isEmail, confirmations) {
+        if (!isEmail) {
+          return {
+            text: editing ? "Channels updated." : "Configuration saved! Notifications are active.",
+            isError: false,
+          };
+        }
+        const c = confirmations || { sent: 0, failed: 0, skipped: 0 };
+        const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+        const missed = c.failed + c.skipped;
+        if (c.sent === 0 && missed === 0) {
+          return { text: editing ? "Recipients updated." : "Saved.", isError: false };
+        }
+        if (c.sent === 0) {
+          return {
+            text:
+              c.failed > 0
+                ? "Saved, but the confirmation email couldn't be sent. Remove the address and add it again to retry."
+                : "Saved. That address has reached today's limit for confirmation emails. Try again tomorrow.",
+            isError: true,
+          };
+        }
+        let text = `Saved. Confirmation sent to ${plural(c.sent, "address", "addresses")}.`;
+        if (missed > 0) text += ` ${plural(missed, "address", "addresses")} couldn't be emailed.`;
+        return { text, isError: false };
       }
 
       // ── Shared config view (org-shared, per file) ──
@@ -2225,6 +2878,8 @@
         app.isOwner = isOwner;
         app.channels = (config.channels || []).map(toChannelSelection);
         if (config.slack_team_id) app.slackTeamId = config.slack_team_id;
+        const isEmail = config.destination === "email";
+        app.destination = isEmail ? "email" : "slack";
 
         // Values ellipsize in CSS; the title attribute keeps the full text
         // reachable on hover.
@@ -2237,15 +2892,31 @@
         setValue("dash-file-key", config.figma_file_key);
         setValue(
           "dash-slack-workspace",
-          config.slack_installations?.slack_team_name ||
-            app.slackTeamName ||
-            config.slack_team_id ||
-            "—",
+          isEmail
+            ? "Email"
+            : config.slack_installations?.slack_team_name ||
+                app.slackTeamName ||
+                config.slack_team_id ||
+                "—",
         );
         setValue(
           "dash-channels",
           (config.channels || []).map((c) => c.name || c.id || c).join(", ") || "—",
         );
+
+        // Slack shows its channels; email shows each address with its
+        // confirmation state, and the zone publish times are shown in.
+        document.getElementById("dash-channels-row").style.display = isEmail ? "none" : "flex";
+        document.getElementById("dash-recipients-row").style.display = isEmail ? "block" : "none";
+        document.getElementById("dash-timezone-row").style.display =
+          isEmail && config.email_timezone ? "flex" : "none";
+        if (isEmail) {
+          renderRecipients(config.email_recipients);
+          setValue("dash-timezone", config.email_timezone || "");
+        }
+        document.getElementById("btn-edit-config").textContent = isEmail
+          ? "Edit recipients"
+          : "Edit channels";
 
         // Team note (org-shared, optional).
         app.customMentions = Array.isArray(config.custom_mentions)
@@ -2275,6 +2946,39 @@
         showView("dashboard");
       }
 
+      // Addresses on an email config, as stored: [{ email, status }] where
+      // status is "pending" | "confirmed" | "unsubscribed".
+      function recipientsOf(config) {
+        return Array.isArray(config?.email_recipients)
+          ? config.email_recipients.filter((r) => r && typeof r.email === "string")
+          : [];
+      }
+
+      // Dashboard list: one address per line with its confirmation state.
+      // Built with the DOM API — addresses are user data, never innerHTML.
+      function renderRecipients(list) {
+        const ul = document.getElementById("dash-recipients");
+        ul.replaceChildren();
+        const states = {
+          confirmed: ["Confirmed", "badge badge-success"],
+          unsubscribed: ["Unsubscribed", "badge badge-neutral"],
+          pending: ["Pending", "badge badge-warning"],
+        };
+        for (const r of recipientsOf({ email_recipients: list })) {
+          const li = document.createElement("li");
+          const addr = document.createElement("span");
+          addr.className = "addr";
+          addr.textContent = r.email;
+          addr.title = r.email;
+          const [label, cls] = states[r.status] || states.pending;
+          const badge = document.createElement("span");
+          badge.className = cls;
+          badge.textContent = label;
+          li.append(addr, badge);
+          ul.appendChild(li);
+        }
+      }
+
       // Map is_active + delivery_status to the header badge and reconnect banner.
       function applyStatus(config) {
         const badge = document.getElementById("dash-status-badge");
@@ -2283,12 +2987,23 @@
         const desc = document.getElementById("dash-reconnect-desc");
         const btn = document.getElementById("dash-reconnect-btn");
         const status = config.delivery_status || "ok";
+        const isEmail = config.destination === "email";
+        const nobodyConfirmed =
+          isEmail && !recipientsOf(config).some((r) => r.status === "confirmed");
         banner.style.display = "none";
         banner.classList.remove("banner-warning");
         btn.style.display = "none";
         btn.onclick = null;
 
-        if (status !== "ok") {
+        if (status === "send_failing" && isEmail) {
+          badge.textContent = "Deliveries failing";
+          badge.className = "badge badge-warning";
+          banner.style.display = "block";
+          banner.classList.add("banner-warning");
+          title.textContent = "Deliveries failing";
+          desc.textContent =
+            "Recent emails couldn't be sent. Check the addresses for typos. We'll try again on the next publish.";
+        } else if (status !== "ok") {
           // One story per state: badge and banner share the same label and
           // hue family (danger for revoked access, warning for failing sends).
           const copy =
@@ -2332,6 +3047,15 @@
         } else if (config.is_active === false) {
           badge.textContent = "Paused";
           badge.className = "badge badge-warning";
+        } else if (nobodyConfirmed) {
+          // Email is set up, but updates only start once an address confirms.
+          badge.textContent = "Awaiting confirmation";
+          badge.className = "badge badge-warning";
+          banner.style.display = "block";
+          banner.classList.add("banner-warning");
+          title.textContent = "No one has confirmed yet";
+          desc.textContent =
+            "Each address was sent a confirmation email. Updates start as soon as one of them confirms. If it hasn't arrived, check the spam folder.";
         } else {
           badge.textContent = "Active";
           badge.className = "badge badge-success";
@@ -2411,8 +3135,13 @@
       }
 
       function editConfig() {
-        // Reopen setup pre-filled with the shared config's channels and note.
-        // app.configId stays set, so Save does a PUT (edit) rather than a create.
+        // Reopen setup pre-filled with the shared config's destination, its
+        // channels or addresses, and the note. app.configId stays set, so Save
+        // does a PUT (edit) rather than a create.
+        app.destination = app.currentConfig?.destination === "email" ? "email" : "slack";
+        document.getElementById("email-input").value = recipientsOf(app.currentConfig)
+          .map((r) => r.email)
+          .join("\n");
         app.channels = (app.currentConfig?.channels || []).map(toChannelSelection);
         app.customMentions = Array.isArray(app.currentConfig?.custom_mentions)
           ? app.currentConfig.custom_mentions.map((m) => ({
@@ -2432,8 +3161,10 @@
         // Configs saved before the privacy flag was persisted get their chip
         // locks backfilled from the live channel list (already loaded, or
         // fetched now — loadChannels backfills when it lands).
-        backfillChannelPrivacy();
-        loadChannels();
+        if (app.destination === "slack") {
+          backfillChannelPrivacy();
+          loadChannels();
+        }
       }
 
       // Disable / enable notifications (any edit-access user) — reversible; keeps
@@ -2485,6 +3216,7 @@
             app.channels = [];
             app.customMentions = [];
             app.isOwner = false;
+            document.getElementById("email-input").value = "";
             const ta = document.getElementById("custom-message");
             if (ta) ta.value = "";
             renderComposerHighlights();
