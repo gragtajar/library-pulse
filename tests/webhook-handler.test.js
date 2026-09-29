@@ -152,7 +152,7 @@ describe("/api/webhook — email destination", () => {
     expect(mail.text).toContain("Description: New buttons");
     expect(mail.text).toContain("Team note: See the changelog");
     expect(mail.text).toContain("    - Button");
-    expect(mail.unsubscribeUrl).toContain("/api/email/unsubscribe?token=");
+    expect(mail.unsubscribeUrl).toContain("/api/email?action=unsubscribe&token=");
 
     expect(
       log()

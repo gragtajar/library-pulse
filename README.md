@@ -352,6 +352,8 @@ The SES credentials use their own names on purpose. Vercel's function runtime ca
 
 10. **One destination per file.** A file notifies Slack or email, not both.
 
+11. **Vercel Hobby allows 12 functions per deployment**, and `backend/api/` has 12. Adding an endpoint means sharing a function (as `/api/email` does) or moving to a paid plan; a test guards the count.
+
 ---
 
 ## Project Structure
@@ -374,8 +376,7 @@ library-pulse/
 │   │   ├── figma/resolve-file.js  Published-asset key → file id (auto file identification)
 │   │   ├── slack/channels.js      Channel-picker directory (conversations.list)
 │   │   ├── slack/mentions.js      Mention-picker directory (users.list + usergroups.list)
-│   │   ├── email/confirm.js       Double-opt-in link: confirm page (GET) + confirm (POST)
-│   │   ├── email/unsubscribe.js   Unsubscribe page (GET) + unsubscribe / one-click (POST)
+│   │   ├── email.js               Links in emails: ?action=confirm | unsubscribe (GET page, POST acts)
 │   │   ├── webhook.js             Figma LIBRARY_PUBLISH receiver → Slack or email fan-out
 │   │   └── health.js              Health check
 │   ├── lib/
@@ -390,6 +391,7 @@ library-pulse/
 │   │   ├── email-message.js       Notification + confirmation email builder (HTML + text)
 │   │   ├── email-send.js          Amazon SES (API v2) send adapter
 │   │   ├── email-delivery.js      Confirmation + notification sending, rate limits, logging
+│   │   ├── email-links.js         The confirm and unsubscribe actions behind /api/email
 │   │   ├── email-pages.js         Escaped confirm / unsubscribe pages
 │   │   ├── slack-blocks.js        Slack Block Kit builder + custom-note composition
 │   │   ├── slack-oauth.js         Slack OAuth scopes (single source, test-pinned)
