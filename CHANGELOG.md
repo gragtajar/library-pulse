@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Backend grouped into 7 Vercel Functions (was 12).** The Hobby plan caps
+  Functions per deployment, and the backend had reached the cap. The OAuth
+  endpoints, the two Slack picker endpoints and the file resolver now share one
+  file each (`api/auth.js`, `api/slack.js`, `api/figma.js`), with `vercel.json`
+  rewriting every public path to its file. No URL changed; the handlers moved to
+  `lib/handlers/` unchanged.
+
 ### Added
 
 - **Email as a destination.** A file can now notify up to five email addresses

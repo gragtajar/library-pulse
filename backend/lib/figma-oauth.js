@@ -9,8 +9,8 @@
 
 /**
  * The Figma OAuth scopes Library Pulse requests, defined once so the authorize
- * URL (`api/auth/figma.js`) and the stored token record
- * (`api/auth/figma-callback.js`) can never drift apart.
+ * URL (`lib/handlers/auth-figma-start.js`) and the stored token record
+ * (`lib/handlers/auth-figma-callback.js`) can never drift apart.
  *
  * - `webhooks:write` — create/delete the `LIBRARY_PUBLISH` webhook on the file
  *   the user selects.
@@ -19,7 +19,7 @@
  *   (see `figma-access.js`). Added in Batch 2.
  * - `library_assets:read` — resolve one of the open file's published
  *   style/component keys to the containing file's key
- *   (api/figma/resolve-file.js), since Figma hides `figma.fileKey` from public
+ *   (lib/handlers/figma-resolve-file.js), since Figma hides `figma.fileKey` from public
  *   Community plugins. Approved by Figma review 2026-08.
  *
  * IMPORTANT: Figma's OAuth `scope` param is SPACE-delimited (OAuth2 spec). A

@@ -7,7 +7,8 @@
  *                       notification
  *
  * One function for both: every file under `api/` is its own Vercel Function,
- * and the Hobby plan allows 12 per deployment. The actions themselves are in
+ * and the Hobby plan caps them per deployment (lib/dispatch.js, which the
+ * other grouped functions use, came later). The actions themselves are in
  * lib/email-links.js.
  */
 

@@ -23,13 +23,13 @@
  * live in the open file — stronger binding than any user-typed value.
  */
 
-import { applyCors, fetchWithTimeout, withErrorHandling } from "../../lib/http.js";
-import { logger } from "../../lib/logger.js";
-import { requireSession } from "../../lib/session.js";
-import { ValidationError } from "../../lib/errors.js";
-import { assertAssetCandidates, assertFigmaFileKey } from "../../lib/validators.js";
-import { getFigmaAccessToken } from "../../lib/figma-access.js";
-import { LIBRARY_ASSETS_SCOPE, scopeGranted } from "../../lib/figma-oauth.js";
+import { applyCors, fetchWithTimeout, withErrorHandling } from "../http.js";
+import { logger } from "../logger.js";
+import { requireSession } from "../session.js";
+import { ValidationError } from "../errors.js";
+import { assertAssetCandidates, assertFigmaFileKey } from "../validators.js";
+import { getFigmaAccessToken } from "../figma-access.js";
+import { LIBRARY_ASSETS_SCOPE, scopeGranted } from "../figma-oauth.js";
 
 const ENDPOINT_BY_TYPE = {
   style: "styles",
@@ -39,8 +39,8 @@ const ENDPOINT_BY_TYPE = {
 
 export default withErrorHandling(
   /**
-   * @param {import("../../lib/types.js").VercelRequest} req
-   * @param {import("../../lib/types.js").VercelResponse} res
+   * @param {import("../types.js").VercelRequest} req
+   * @param {import("../types.js").VercelResponse} res
    */
   async function handler(req, res) {
     if (applyCors(req, res)) return;

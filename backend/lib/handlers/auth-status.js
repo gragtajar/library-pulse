@@ -11,14 +11,14 @@
  *   - we only return `result_data` for `completed` sessions
  */
 
-import supabase from "../lib/supabase.js";
-import { applyCors, withErrorHandling } from "../lib/http.js";
-import { assertUuid } from "../lib/validators.js";
+import supabase from "../supabase.js";
+import { applyCors, withErrorHandling } from "../http.js";
+import { assertUuid } from "../validators.js";
 
 export default withErrorHandling(
   /**
-   * @param {import("../lib/types.js").VercelRequest} req
-   * @param {import("../lib/types.js").VercelResponse} res
+   * @param {import("../types.js").VercelRequest} req
+   * @param {import("../types.js").VercelResponse} res
    */
   async function handler(req, res) {
     if (applyCors(req, res)) return;

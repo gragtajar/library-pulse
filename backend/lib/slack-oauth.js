@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * Slack OAuth scope constants — defined once, imported by the authorize
- * endpoint (api/auth/slack.js) and pinned by tests, so a scope some endpoint
+ * endpoint (lib/handlers/auth-slack-start.js) and pinned by tests, so a scope some endpoint
  * depends on can never silently go missing from the authorize request again.
  *
  * That was the bug behind "@mentions are unavailable until Slack is

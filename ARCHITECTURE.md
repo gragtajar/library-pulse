@@ -184,7 +184,7 @@ library-pulse/
 
 We deliberately have **zero runtime web frameworks** — every endpoint is a default-export handler that takes `(req, res)`. Vercel's runtime gives us the rest.
 
-**Function budget.** Without a framework, every file under `backend/api/` becomes its own Vercel Function, and the Hobby plan allows 12 per deployment. `backend/api/` is at 12. A thirteenth doesn't fail the build: the deployment errors afterwards with nothing in the build log, so `tests/vercel-function-count.test.js` fails first. New endpoints either share a function and route by a parameter (as `/api/email` does with `?action=`) or the project moves to a paid plan.
+**Function budget.** Without a framework, every file under `backend/api/` becomes its own Vercel Function, and "for Hobby, this approach is limited to 12 Vercel Functions per deployment" ([vercel.com/docs/functions/runtimes](https://vercel.com/docs/functions/runtimes)). A thirteenth doesn't fail the build: the deployment errors afterwards with nothing in the build log (seen 2026-09-29). So related endpoints share a Function: `backend/api/` holds 7 files, and `vercel.json` is the only place that maps the 12 public paths to them, rewriting e.g. `/api/auth/figma` to `/api/auth.js?fn=figma-start`. `lib/dispatch.js` reads `fn` and hands the request to the handler, which lives unchanged under `lib/handlers/`. `tests/vercel-function-count.test.js` pins the public paths, the file count, and that every `fn` names a handler the file has. A new destination (Google Chat, Teams) gets one file with its events, OAuth and listing endpoints behind `fn`.
 
 ---
 

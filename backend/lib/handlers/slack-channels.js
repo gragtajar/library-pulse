@@ -21,20 +21,16 @@
  * any other caller is access-checked (lib/figma-access.js), matching /api/config.
  */
 
-import { applyCors, withErrorHandling } from "../../lib/http.js";
-import { requireSession } from "../../lib/session.js";
-import { normalizeChannels } from "../../lib/slack-channels.js";
-import { resolveWorkspaceToken } from "../../lib/slack-workspace.js";
-import {
-  pageSlackList,
-  readDirectoryCache,
-  writeDirectoryCache,
-} from "../../lib/slack-directory.js";
+import { applyCors, withErrorHandling } from "../http.js";
+import { requireSession } from "../session.js";
+import { normalizeChannels } from "../slack-channels.js";
+import { resolveWorkspaceToken } from "../slack-workspace.js";
+import { pageSlackList, readDirectoryCache, writeDirectoryCache } from "../slack-directory.js";
 
 export default withErrorHandling(
   /**
-   * @param {import("../../lib/types.js").VercelRequest} req
-   * @param {import("../../lib/types.js").VercelResponse} res
+   * @param {import("../types.js").VercelRequest} req
+   * @param {import("../types.js").VercelResponse} res
    */
   async function handler(req, res) {
     if (applyCors(req, res)) return;

@@ -26,23 +26,23 @@
  * `plan_upgrade_required` degrades to an empty list, not an error.
  */
 
-import { applyCors, fetchWithTimeout, withErrorHandling } from "../../lib/http.js";
-import { logger } from "../../lib/logger.js";
-import { requireSession } from "../../lib/session.js";
-import { UpstreamError, ValidationError } from "../../lib/errors.js";
-import { resolveWorkspaceToken } from "../../lib/slack-workspace.js";
+import { applyCors, fetchWithTimeout, withErrorHandling } from "../http.js";
+import { logger } from "../logger.js";
+import { requireSession } from "../session.js";
+import { UpstreamError, ValidationError } from "../errors.js";
+import { resolveWorkspaceToken } from "../slack-workspace.js";
 import {
   SLACK_AUTH_ERRORS,
   normalizeMembers,
   pageSlackList,
   readDirectoryCache,
   writeDirectoryCache,
-} from "../../lib/slack-directory.js";
+} from "../slack-directory.js";
 
 export default withErrorHandling(
   /**
-   * @param {import("../../lib/types.js").VercelRequest} req
-   * @param {import("../../lib/types.js").VercelResponse} res
+   * @param {import("../types.js").VercelRequest} req
+   * @param {import("../types.js").VercelResponse} res
    */
   async function handler(req, res) {
     if (applyCors(req, res)) return;
