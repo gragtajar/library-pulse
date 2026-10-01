@@ -11,19 +11,19 @@
  * which HTML-escapes everything.
  */
 
-import { encrypt } from "../../lib/encryption.js";
-import supabase from "../../lib/supabase.js";
-import { logger } from "../../lib/logger.js";
-import { renderResultPage } from "../../lib/oauth-result-page.js";
-import { claimAuthSession, finalizeAuthSession } from "../../lib/auth-session.js";
-import { assertUuid } from "../../lib/validators.js";
-import { fetchWithTimeout, withErrorHandling } from "../../lib/http.js";
-import { UpstreamError, ValidationError } from "../../lib/errors.js";
+import { encrypt } from "../encryption.js";
+import supabase from "../supabase.js";
+import { logger } from "../logger.js";
+import { renderResultPage } from "../oauth-result-page.js";
+import { claimAuthSession, finalizeAuthSession } from "../auth-session.js";
+import { assertUuid } from "../validators.js";
+import { fetchWithTimeout, withErrorHandling } from "../http.js";
+import { UpstreamError, ValidationError } from "../errors.js";
 
 export default withErrorHandling(
   /**
-   * @param {import("../../lib/types.js").VercelRequest} req
-   * @param {import("../../lib/types.js").VercelResponse} res
+   * @param {import("../types.js").VercelRequest} req
+   * @param {import("../types.js").VercelResponse} res
    */
   async function handler(req, res) {
     if (req.method !== "GET") {

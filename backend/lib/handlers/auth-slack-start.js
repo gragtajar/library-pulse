@@ -7,17 +7,17 @@
  * Returns: `{ url }` — the Slack authorize URL for the plugin to open.
  */
 
-import supabase from "../../lib/supabase.js";
-import { applyCors, withErrorHandling } from "../../lib/http.js";
-import { logger } from "../../lib/logger.js";
-import { assertFigmaUserId, assertUuid } from "../../lib/validators.js";
-import { ValidationError } from "../../lib/errors.js";
-import { SLACK_OAUTH_SCOPE_PARAM } from "../../lib/slack-oauth.js";
+import supabase from "../supabase.js";
+import { applyCors, withErrorHandling } from "../http.js";
+import { logger } from "../logger.js";
+import { assertFigmaUserId, assertUuid } from "../validators.js";
+import { ValidationError } from "../errors.js";
+import { SLACK_OAUTH_SCOPE_PARAM } from "../slack-oauth.js";
 
 export default withErrorHandling(
   /**
-   * @param {import("../../lib/types.js").VercelRequest} req
-   * @param {import("../../lib/types.js").VercelResponse} res
+   * @param {import("../types.js").VercelRequest} req
+   * @param {import("../types.js").VercelResponse} res
    */
   async function handler(req, res) {
     if (applyCors(req, res)) return;

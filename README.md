@@ -365,21 +365,25 @@ library-pulse/
 │   ├── code.js            Plugin sandbox (Figma API access; no network/DOM)
 │   └── ui.html            Plugin UI (HTML + CSS + JS; talks to the backend)
 ├── backend/
-│   ├── api/
-│   │   ├── auth/
-│   │   │   ├── slack.js           Slack OAuth initiation
-│   │   │   ├── slack-callback.js  Slack OAuth callback
-│   │   │   ├── figma.js           Figma OAuth initiation
-│   │   │   └── figma-callback.js  Figma OAuth callback (mints the session token)
-│   │   ├── auth-status.js         Poll OAuth completion
-│   │   ├── config.js              Config CRUD + file-webhook registration/teardown
-│   │   ├── figma/resolve-file.js  Published-asset key → file id (auto file identification)
-│   │   ├── slack/channels.js      Channel-picker directory (conversations.list)
-│   │   ├── slack/mentions.js      Mention-picker directory (users.list + usergroups.list)
+│   ├── api/                       One Vercel Function per file; vercel.json maps the public paths
+│   │   ├── auth.js                /api/auth/{figma,slack}(-callback), /api/auth-status
+│   │   ├── config.js              /api/config: config CRUD + file-webhook registration/teardown
+│   │   ├── figma.js               /api/figma/resolve-file
+│   │   ├── slack.js               /api/slack/channels, /api/slack/mentions
 │   │   ├── email.js               Links in emails: ?action=confirm | unsubscribe (GET page, POST acts)
 │   │   ├── webhook.js             Figma LIBRARY_PUBLISH receiver → Slack or email fan-out
 │   │   └── health.js              Health check
 │   ├── lib/
+│   │   ├── dispatch.js            Several public paths on one Function (`?fn=`)
+│   │   ├── handlers/
+│   │   │   ├── auth-slack-start.js      Slack OAuth initiation
+│   │   │   ├── auth-slack-callback.js   Slack OAuth callback
+│   │   │   ├── auth-figma-start.js      Figma OAuth initiation
+│   │   │   ├── auth-figma-callback.js   Figma OAuth callback (mints the session token)
+│   │   │   ├── auth-status.js           Poll OAuth completion
+│   │   │   ├── figma-resolve-file.js    Published-asset key → file id (auto file identification)
+│   │   │   ├── slack-channels.js        Channel-picker directory (conversations.list)
+│   │   │   └── slack-mentions.js        Mention-picker directory (users.list + usergroups.list)
 │   │   ├── supabase.js            Supabase client
 │   │   ├── session.js             HMAC-signed session tokens
 │   │   ├── auth-session.js        OAuth state lifecycle (atomic claim)
