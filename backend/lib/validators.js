@@ -189,22 +189,55 @@ export function assertChannelList(v) {
   });
 }
 
-/** Notification destinations a file config can target (migration 006). */
-const DESTINATIONS = new Set(["slack", "email"]);
+/** Notification destinations a file config can target (migrations 006, 007). */
+const DESTINATIONS = new Set(["slack", "email", "gchat"]);
 
 /**
  * Validate the destination. Absent (older plugin builds) means Slack, which is
  * the only destination those builds know about.
  *
  * @param {unknown} v
- * @returns {"slack" | "email"}
+ * @returns {"slack" | "email" | "gchat"}
  */
 export function assertDestination(v) {
   if (v == null) return "slack";
   if (typeof v !== "string" || !DESTINATIONS.has(v)) {
-    throw new ValidationError("Destination must be 'slack' or 'email'");
+    throw new ValidationError("Destination must be 'slack', 'email' or 'gchat'");
   }
-  return /** @type {"slack" | "email"} */ (v);
+  return /** @type {"slack" | "email" | "gchat"} */ (v);
+}
+
+// Google Chat spaces (migration 007): Chat names them "spaces/<id>"; the
+// plugin sends the display name along so the dashboard can show it without
+// another API call. Keep in sync with GCHAT_SPACES_MAX in figma-plugin/ui.html.
+export const GCHAT_SPACES_MAX = 3;
+const GCHAT_SPACE_NAME = /^spaces\/[A-Za-z0-9_-]{1,128}$/;
+
+/**
+ * @param {unknown} v
+ * @returns {Array<{ name: string, display_name: string }>}
+ */
+export function assertSpaceList(v) {
+  if (!Array.isArray(v) || v.length < 1 || v.length > GCHAT_SPACES_MAX) {
+    throw new ValidationError(`Provide between 1 and ${GCHAT_SPACES_MAX} Google Chat spaces`);
+  }
+  /** @type {Array<{ name: string, display_name: string }>} */
+  const out = [];
+  for (const entry of v) {
+    const name = typeof entry === "string" ? entry : entry?.name;
+    if (typeof name !== "string" || !GCHAT_SPACE_NAME.test(name)) {
+      throw new ValidationError("Invalid Google Chat space");
+    }
+    if (out.some((s) => s.name === name)) continue;
+    const label =
+      typeof entry === "object" && entry && typeof entry.display_name === "string"
+        ? entry.display_name
+        : typeof entry === "object" && entry && typeof entry.displayName === "string"
+          ? entry.displayName
+          : "";
+    out.push({ name, display_name: label.slice(0, 128) });
+  }
+  return out;
 }
 
 // Email addresses: the shape browsers accept for <input type="email"> (the

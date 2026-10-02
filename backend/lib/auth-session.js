@@ -25,7 +25,7 @@ import { ForbiddenError } from "./errors.js";
  * was a plain SELECT, which left a TOCTOU window despite claiming atomicity.
  *
  * @param {string} state
- * @param {"slack" | "figma"} provider
+ * @param {"slack" | "figma" | "google"} provider
  * @returns {Promise<{ state: string, provider: string, figma_user_id: string|null }>}
  */
 export async function claimAuthSession(state, provider) {
