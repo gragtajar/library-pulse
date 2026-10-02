@@ -80,6 +80,32 @@ manages that file's single shared config. The backend enforces this as follows:
   day, and 150 notification emails per file per day. When a limit can't be checked
   (database error), nothing is sent.
 
+## Google Chat
+
+- **Sign-in asks for the least it can.** The Google sign-in requests
+  `chat.spaces.readonly` (list the spaces the user belongs to),
+  `chat.memberships.app` (add the Library Pulse app to a space the user chose) and
+  `openid email` (who connected). The scope list is pinned in `lib/google-oauth.js`
+  and the callback refuses a grant that left out either Chat scope.
+- **The user's token is never used to post.** Updates are posted by the Library
+  Pulse Chat app itself (`chat.bot`), with credentials obtained through Workload
+  Identity Federation from Vercel's OIDC token (or a service-account key). Chat marks
+  such messages as coming from an app.
+- **A connected account is private.** An installation can be put on a file only by
+  the Figma user who signed in with it; other editors of that file may then edit the
+  spaces, but cannot take the account elsewhere.
+- **Events are authenticated.** Google Chat calls `/api/gchat/events` with a
+  Google-signed OIDC ID token whose audience is that URL and whose issuer email is
+  `chat@system.gserviceaccount.com`; the token is verified with google-auth-library
+  before the body is read. The endpoint answers within Chat's 30-second window.
+- **No injection through names.** Text in an update neutralises Chat's `<…>` syntax,
+  so a component called `<users/all>` cannot mention everyone and a crafted name
+  cannot smuggle a link.
+- **Revocation is observed.** If Google rejects the stored refresh token, the
+  installation is marked revoked and its files show "Reconnect Google Chat". Removing
+  the app from a space in Chat stops posts to that space; `@Library Pulse stop`
+  pauses them.
+
 ## How authentication works
 
 - **No passwords.** Authentication is delegated entirely to **Figma OAuth 2.0** and
@@ -120,6 +146,14 @@ manages that file's single shared config. The backend enforces this as follows:
 - **In the backend** (Postgres on Supabase, serverless API on Vercel): the Figma user
   id, the selected file key and file name, the chosen Slack channel IDs, and the OAuth
   tokens — tokens encrypted at rest with AES-256-GCM. **No file contents are stored.**
+- **For the Google Chat destination:** for each Google account that connected: its
+  stable Google id, email address and Workspace domain, the Figma user who connected
+  it, and its OAuth refresh token (encrypted at rest); for each file: the chosen spaces
+  (id and display name) and the time zone of the editor who saved them; for each space
+  the app was added to: its id, name, who added the app and when, whether the app is
+  still a member, and whether updates were paused; and, in the delivery log, which
+  space each update was posted to and whether it succeeded. Google processes the
+  messages as the Chat app's provider.
 - **For the email destination:** the addresses entered for a file, each with its state
   (pending, confirmed, unsubscribed) and the time it was added and confirmed; the time
   zone of the editor who saved the list; and, in the delivery log, which address each

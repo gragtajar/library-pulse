@@ -88,6 +88,8 @@ End user clicks "Connect Slack" in plugin UI
 
 Figma OAuth is structurally identical (different scopes, different upstream URL, different table).
 
+Google Chat uses the same shape with Google sign-in: `POST /api/gchat/start` (session required) → Google's authorize URL (`chat.spaces.readonly`, `chat.memberships.app`, `openid email`, `access_type=offline`, `prompt=consent`) → `/api/gchat/callback` exchanges the code, verifies the ID token, and stores the refresh token encrypted in `google_installations` → the plugin lists the user's spaces through `/api/gchat/spaces` (user token, `spaces.list`) → on save, `/api/config` adds the Library Pulse app to each new space with the user's token (`spaces.members.create`, member `users/app`).
+
 The email destination has no OAuth. Saving a list of addresses stores each new one as `pending` and sends it a confirmation email; the recipient's click on **Confirm address** (`POST /api/email?action=confirm`, authorized by the signed token in the link) flips it to `confirmed`.
 
 ---
@@ -125,6 +127,8 @@ User publishes a library in Figma
 Configuration is **org-shared per file**: there is one config and one webhook per file, registered by the original setter with their own Figma token (`config.js` → `ensureWebhook`). Step 6 finds the file's single active config. Slack revocation detected in step 7 flips the config's `delivery_status` so the plugin shows a "reconnect" banner.
 
 ---
+
+For a Google Chat config the fan-out posts one message per chosen space as the app (`spaces.messages.create` with a `chat.bot` token from `lib/google-app-auth.js`), skipping spaces the app was removed from or that asked to stop, deduped per space through `notification_log.recipient` and Chat's own `requestId` idempotency. Chat's interaction events (`/api/gchat/events`: added to a space, removed, @mentioned) keep `gchat_spaces` current.
 
 ## 4. Security boundaries
 
@@ -184,7 +188,7 @@ library-pulse/
 
 We deliberately have **zero runtime web frameworks** — every endpoint is a default-export handler that takes `(req, res)`. Vercel's runtime gives us the rest.
 
-**Function budget.** Without a framework, every file under `backend/api/` becomes its own Vercel Function, and "for Hobby, this approach is limited to 12 Vercel Functions per deployment" ([vercel.com/docs/functions/runtimes](https://vercel.com/docs/functions/runtimes)). A thirteenth doesn't fail the build: the deployment errors afterwards with nothing in the build log (seen 2026-09-29). So related endpoints share a Function: `backend/api/` holds 7 files, and `vercel.json` is the only place that maps the 12 public paths to them, rewriting e.g. `/api/auth/figma` to `/api/auth.js?fn=figma-start`. `lib/dispatch.js` reads `fn` and hands the request to the handler, which lives unchanged under `lib/handlers/`. `tests/vercel-function-count.test.js` pins the public paths, the file count, and that every `fn` names a handler the file has. A new destination (Google Chat, Teams) gets one file with its events, OAuth and listing endpoints behind `fn`.
+**Function budget.** Without a framework, every file under `backend/api/` becomes its own Vercel Function, and "for Hobby, this approach is limited to 12 Vercel Functions per deployment" ([vercel.com/docs/functions/runtimes](https://vercel.com/docs/functions/runtimes)). A thirteenth doesn't fail the build: the deployment errors afterwards with nothing in the build log (seen 2026-09-29). So related endpoints share a Function: `backend/api/` holds 8 files, and `vercel.json` is the only place that maps the 16 public paths to them, rewriting e.g. `/api/auth/figma` to `/api/auth.js?fn=figma-start`. `lib/dispatch.js` reads `fn` and hands the request to the handler, which lives unchanged under `lib/handlers/`. `tests/vercel-function-count.test.js` pins the public paths, the file count, and that every `fn` names a handler the file has. A new destination (Google Chat, Teams) gets one file with its events, OAuth and listing endpoints behind `fn`.
 
 ---
 
