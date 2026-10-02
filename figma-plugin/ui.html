@@ -779,7 +779,9 @@
       <!--  SETUP VIEW                             -->
       <!-- ════════════════════════════════════════ -->
       <div id="view-setup" class="view">
-        <p class="subtitle">Get Slack or email updates when your Figma library is published.</p>
+        <p class="subtitle">
+          Get Slack, email or Google Chat updates when your Figma library is published.
+        </p>
 
         <!-- Figma account — connected automatically from your Figma login -->
         <div class="step" id="figma-banner">
@@ -803,9 +805,9 @@
           </div>
         </div>
 
-        <!-- Step 2: Choose the destination — one per file. Slack and email
-             today; the two "Coming soon" cards mark where Microsoft Teams and
-             Google Chat will land. -->
+        <!-- Step 2: Choose the destination — one per file. Slack, email and
+             Google Chat today; the "Coming soon" card marks where Microsoft
+             Teams will land. -->
         <div class="step" id="step-dest">
           <div class="step-num pending" id="step-dest-num">2</div>
           <div class="step-content">
@@ -909,7 +911,6 @@
                 role="radio"
                 aria-checked="false"
                 data-dest="gchat"
-                data-soon="1"
                 disabled
               >
                 <span class="dest-icon" aria-hidden="true">
@@ -929,7 +930,7 @@
                 </span>
                 <span class="dest-text">
                   <span class="dest-name">Google Chat</span>
-                  <span class="dest-meta">Coming soon</span>
+                  <span class="dest-meta">Up to 3 spaces</span>
                 </span>
               </button>
             </div>
@@ -968,6 +969,38 @@
                 Connect to Slack
               </button>
               <div id="slack-status" style="margin-top: 8px"></div>
+            </div>
+
+            <!-- Google Chat: a Google sign-in (OAuth) in the browser, the same
+                 round trip as Slack. The account that signs in is the one
+                 whose spaces are listed in step 4. -->
+            <div id="gchat-connect" style="display: none">
+              <button
+                class="btn btn-secondary"
+                id="btn-connect-gchat"
+                onclick="connectGoogle()"
+                disabled
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.4"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.2 3.6A1.6 1.6 0 0 1 3.8 2h8.4a1.6 1.6 0 0 1 1.6 1.6v5.8a1.6 1.6 0 0 1-1.6 1.6H7.3l-2.9 2.6V11h-.6a1.6 1.6 0 0 1-1.6-1.6z"
+                  />
+                </svg>
+                Connect Google Chat
+              </button>
+              <div class="hint" id="gchat-connect-hint" style="margin-top: 6px">
+                Sign in with the Google Workspace account that belongs to the spaces you want.
+              </div>
+              <div id="gchat-status" style="margin-top: 8px"></div>
             </div>
           </div>
         </div>
@@ -1068,6 +1101,35 @@
                 </div>
               </div>
 
+              <!-- Google Chat spaces: the same picker as channels, over the
+                   spaces the signed-in account belongs to. -->
+              <div id="gchat-panel" style="display: none">
+                <div class="channels-list" id="spaces-list"></div>
+                <div
+                  class="channel-count"
+                  id="space-count"
+                  aria-live="polite"
+                  style="display: none"
+                ></div>
+
+                <div class="channel-picker" id="space-picker">
+                  <div class="input-group" style="margin-bottom: 0">
+                    <input
+                      type="text"
+                      id="space-search"
+                      placeholder="Search spaces…"
+                      autocomplete="off"
+                    />
+                  </div>
+                  <div class="channel-dropdown" id="space-dropdown" style="display: none"></div>
+                </div>
+                <div class="hint" id="spaces-hint" style="margin-top: 4px">
+                  Pick up to 3 spaces you're a member of. Library Pulse is added to each of them
+                  when you save.
+                </div>
+                <div class="hint" id="gchat-tz-hint"></div>
+              </div>
+
               <!-- Custom message (optional, org-shared). On Slack it is an
                    @-mention composer; on email it is a plain note. -->
               <div
@@ -1150,7 +1212,7 @@
             <span class="dash-value" id="dash-slack-workspace">—</span>
           </div>
           <div class="dash-row" id="dash-channels-row">
-            <span class="dash-label">Channels</span>
+            <span class="dash-label" id="dash-channels-label">Channels</span>
             <span class="dash-value" id="dash-channels">—</span>
           </div>
           <div class="dash-row dash-row-stack" id="dash-recipients-row" style="display: none">
@@ -1213,6 +1275,19 @@
       // Email destination: at most this many addresses per file. Keep in sync
       // with backend/lib/validators.js EMAIL_RECIPIENTS_MAX.
       const EMAIL_MAX = 5;
+      // Google Chat destination: at most this many spaces per file. Keep in
+      // sync with backend/lib/validators.js GCHAT_SPACES_MAX.
+      const GCHAT_SPACES_MAX = 3;
+      // Chat names spaces "spaces/<id>". Keep in sync with the backend.
+      const GCHAT_SPACE_NAME_RE = /^spaces\/[A-Za-z0-9_-]{1,128}$/;
+
+      // How each destination is named in copy, and what it targets.
+      const DEST_NAMES = { slack: "Slack", email: "email", gchat: "Google Chat" };
+      const DEST_TARGETS = {
+        slack: "Slack channels",
+        email: "Email recipients",
+        gchat: "Google Chat spaces",
+      };
 
       // Step 4's copy per destination (step 2 decides which one shows; "none"
       // is first-time setup before a destination is picked).
@@ -1235,6 +1310,12 @@
           range: "(1–5)",
           desc: "Choose who gets an email when the library is published.",
           notePlaceholder: "Included in every email.",
+        },
+        gchat: {
+          name: "Add Google Chat spaces",
+          range: "(1–3)",
+          desc: "Choose the spaces where publish updates get posted.",
+          notePlaceholder: "Posted with every update.",
         },
       };
 
@@ -1262,11 +1343,22 @@
         fileKey: null,
         fileName: null,
         currentUser: null,
-        // "slack" | "email" | null (nothing chosen yet in first-time setup).
+        // "slack" | "email" | "gchat" | null (nothing chosen yet in first-time setup).
         destination: null,
         slackConnected: false,
         slackTeamId: null,
         slackTeamName: null,
+        // Google Chat: the Google account that signed in (lib/google-installations.js).
+        gchatConnected: false,
+        gchatInstallationId: null,
+        gchatEmail: null,
+        spaces: [],
+        allSpaces: [],
+        spacesLoaded: false,
+        spacesLoading: false,
+        spacesError: null,
+        spacesForKey: null,
+        spacesTruncated: false,
         figmaConnected: false,
         sessionToken: null,
         channels: [],
@@ -1345,9 +1437,10 @@
         app.initialized = true;
 
         // Read stored auth in parallel (postMessage round-trips to the sandbox).
-        const [slackData, figmaData] = await Promise.all([
+        const [slackData, figmaData, googleData] = await Promise.all([
           getStorage("slack_auth"),
           getStorage("figma_auth"),
+          getStorage("google_auth"),
         ]);
 
         if (slackData) {
@@ -1356,6 +1449,11 @@
           app.slackTeamName = slackData.slack_team_name;
           // Someone who already connected Slack here keeps it as the default.
           app.destination = "slack";
+        }
+        if (googleData && googleData.google_installation_id) {
+          app.gchatConnected = true;
+          app.gchatInstallationId = googleData.google_installation_id;
+          app.gchatEmail = googleData.google_email || null;
         }
 
         if (figmaData && figmaData.session_token) {
@@ -1619,13 +1717,15 @@
       // One destination per file. Picking Slack reveals its Connect button;
       // email has nothing to connect, so choosing it completes the step.
       function selectDestination(dest) {
-        if ((dest !== "slack" && dest !== "email") || !app.figmaConnected) return;
+        if (!(dest in DEST_NAMES) || !app.figmaConnected) return;
         if (app.destination === dest) return;
         app.destination = dest;
         closeDropdown();
+        closeSpaceDropdown();
         hideMentionDropdown();
         updateSetupState();
         if (dest === "slack") renderChannels();
+        if (dest === "gchat") renderSpaces();
       }
 
       // Paint step 2's radio group and everything that follows the choice:
@@ -1647,23 +1747,28 @@
 
         const isEmail = app.destination === "email";
         const isSlack = app.destination === "slack";
+        const isGchat = app.destination === "gchat";
         const show = (id, on) => {
           document.getElementById(id).style.display = on ? "block" : "none";
         };
         show("slack-connect", isSlack);
         show("email-connect-note", isEmail);
+        show("gchat-connect", isGchat);
         show("slack-panel", isSlack);
         show("email-panel", isEmail);
+        show("gchat-panel", isGchat);
         // Nothing chosen yet → step 4 has nothing to ask.
-        show("note-group", isSlack || isEmail);
+        show("note-group", isSlack || isEmail || isGchat);
 
-        const copy = TARGETS_COPY[isEmail ? "email" : isSlack ? "slack" : "none"];
+        const copy = TARGETS_COPY[app.destination in TARGETS_COPY ? app.destination : "none"];
         document.getElementById("step-targets-name").textContent = copy.name;
         document.getElementById("step-targets-range").textContent = copy.range;
         document.getElementById("step-targets-desc").textContent = copy.desc;
         document.getElementById("custom-message").placeholder = copy.notePlaceholder;
         document.getElementById("email-tz-hint").textContent =
           `Publish times in emails use your time zone (${currentTimezone()}).`;
+        document.getElementById("gchat-tz-hint").textContent =
+          `Publish times in Chat use your time zone (${currentTimezone()}).`;
 
         updateMentionHint();
         renderComposerHighlights();
@@ -1724,7 +1829,9 @@
         // Done when email is chosen, or Slack is chosen and its workspace is
         // connected.
         const destReady =
-          app.destination === "email" || (app.destination === "slack" && app.slackConnected);
+          app.destination === "email" ||
+          (app.destination === "slack" && app.slackConnected) ||
+          (app.destination === "gchat" && app.gchatConnected);
         if (destReady) {
           destNum.className = "step-num done";
           destNum.textContent = "✓";
@@ -1737,6 +1844,15 @@
           slackBtn.disabled = true;
         } else {
           slackBtn.disabled = !app.figmaConnected;
+        }
+        const gchatBtn = document.getElementById("btn-connect-gchat");
+        if (app.gchatConnected) {
+          gchatBtn.textContent = `Connected as ${app.gchatEmail || "your Google account"}`;
+          gchatBtn.disabled = true;
+          document.getElementById("gchat-connect-hint").style.display = "none";
+        } else {
+          gchatBtn.disabled = !app.figmaConnected;
+          document.getElementById("gchat-connect-hint").style.display = "block";
         }
         renderDestination();
 
@@ -2030,6 +2146,249 @@
             e && e.message ? e.message : "Connection error. Check your network.",
             true,
           );
+        }
+      }
+
+      // ── Google sign-in (Google Chat destination) ──
+      // The same round trip as Slack: the backend records a pending session for
+      // our state nonce and returns Google's authorize URL; the browser does the
+      // sign-in and consent; we poll until the callback completes the session.
+      let googlePollTimer = null;
+
+      async function connectGoogle(onDone) {
+        const btn = document.getElementById("btn-connect-gchat");
+        if (!app.sessionToken) {
+          notify("Connect Figma first.", true);
+          return;
+        }
+        const state = makeStateNonce();
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Connecting…';
+
+        try {
+          const res = await api(`/api/gchat/start`, {
+            method: "POST",
+            body: JSON.stringify({ state }),
+          });
+          const data = await readJson(res);
+          if (!res.ok || !data.url) {
+            throw new Error(
+              friendlyError(data.error) || `Couldn't start Google sign-in (HTTP ${res.status}).`,
+            );
+          }
+          openUrl(data.url);
+          setStatus("gchat-status", "Waiting for Google sign-in… (check your browser)", false);
+
+          if (googlePollTimer) clearInterval(googlePollTimer);
+          googlePollTimer = setInterval(async () => {
+            try {
+              const statusRes = await api(`/api/auth-status?state=${state}`);
+              const statusData = await readJson(statusRes);
+              if (statusData.status === "completed") {
+                clearInterval(googlePollTimer);
+                googlePollTimer = null;
+                app.gchatConnected = true;
+                app.gchatInstallationId = statusData.data.google_installation_id;
+                app.gchatEmail = statusData.data.google_email || null;
+                // A new account means a new space list.
+                app.spacesLoaded = false;
+                app.spacesForKey = null;
+                setStorage("google_auth", statusData.data);
+                document.getElementById("gchat-status").innerHTML = "";
+                notify("Google Chat connected!");
+                if (typeof onDone === "function") onDone();
+                else updateSetupState();
+              } else if (statusData.status === "failed") {
+                clearInterval(googlePollTimer);
+                googlePollTimer = null;
+                btn.disabled = false;
+                btn.textContent = "Connect Google Chat";
+                setStatus(
+                  "gchat-status",
+                  statusData.data?.error === "scopes_declined"
+                    ? "Both Google Chat permissions are needed. Try again and allow both."
+                    : "Sign-in failed. Try again.",
+                  true,
+                );
+              }
+            } catch (e) {
+              // Polling error — keep trying
+            }
+          }, 500);
+
+          setTimeout(() => {
+            if (googlePollTimer) {
+              clearInterval(googlePollTimer);
+              googlePollTimer = null;
+              btn.disabled = false;
+              btn.textContent = "Connect Google Chat";
+              setStatus("gchat-status", "Timed out. Please try again.", true);
+            }
+          }, 180000);
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = "Connect Google Chat";
+          setStatus(
+            "gchat-status",
+            e && e.message ? e.message : "Connection error. Check your network.",
+            true,
+          );
+        }
+      }
+
+      // ── Google Chat spaces (step 4, Google Chat destination) ──
+      // Which account the picker should list: the one on an existing Google
+      // Chat config for this file, or the account that just signed in.
+      function spaceQuery() {
+        const savedOnGchat = app.configId && app.currentConfig?.destination === "gchat";
+        if (savedOnGchat)
+          return { key: `f:${app.fileKey}`, qs: `fileKey=${encodeURIComponent(app.fileKey)}` };
+        if (app.gchatInstallationId)
+          return {
+            key: `i:${app.gchatInstallationId}`,
+            qs: `installationId=${encodeURIComponent(app.gchatInstallationId)}`,
+          };
+        return null;
+      }
+
+      async function loadSpaces() {
+        const q = spaceQuery();
+        if (!q) return;
+        if (app.spacesLoading) return;
+        if (app.spacesLoaded && app.spacesForKey === q.key) return;
+
+        app.spacesLoading = true;
+        app.spacesError = null;
+        app.spacesForKey = q.key;
+        renderSpaceDropdown();
+        try {
+          const res = await api(`/api/gchat/spaces?${q.qs}`);
+          const data = await readJson(res);
+          if (!res.ok) throw new Error(friendlyError(data.error) || "Couldn't load spaces");
+          app.allSpaces = Array.isArray(data.spaces) ? data.spaces : [];
+          app.spacesTruncated = data.truncated === true;
+          app.spacesLoaded = true;
+          const hint = document.getElementById("spaces-hint");
+          if (hint && app.spacesTruncated) {
+            hint.textContent =
+              "You're in more spaces than can be listed; search by name to find the rest.";
+          }
+        } catch (e) {
+          app.spacesError = e && e.message ? e.message : "Couldn't load spaces";
+        } finally {
+          app.spacesLoading = false;
+          renderSpaceDropdown();
+        }
+      }
+
+      function openSpaceDropdown() {
+        document.getElementById("space-dropdown").style.display = "block";
+        loadSpaces();
+        renderSpaceDropdown();
+      }
+
+      function closeSpaceDropdown() {
+        const dd = document.getElementById("space-dropdown");
+        if (dd) dd.style.display = "none";
+      }
+
+      function renderSpaceDropdown() {
+        const dd = document.getElementById("space-dropdown");
+        if (!dd || dd.style.display === "none") return;
+        dd.replaceChildren();
+
+        if (app.spacesLoading) return dd.appendChild(emptyRow("Loading spaces…"));
+        if (app.spacesError) return dd.appendChild(emptyRow(app.spacesError));
+
+        const filter = (document.getElementById("space-search").value || "").toLowerCase().trim();
+        const selected = new Set(app.spaces.map((s) => s.name));
+        const matches = app.allSpaces
+          .filter((s) => !selected.has(s.name))
+          .filter((s) => !filter || (s.displayName || "").toLowerCase().includes(filter))
+          .slice(0, 50);
+
+        if (matches.length === 0) {
+          return dd.appendChild(
+            emptyRow(app.allSpaces.length ? "No matching spaces" : "No spaces found"),
+          );
+        }
+
+        const atMax = app.spaces.length >= GCHAT_SPACES_MAX;
+        for (const sp of matches) {
+          const opt = document.createElement("div");
+          opt.className = "channel-option";
+          const name = document.createElement("span");
+          name.className = "ch-name";
+          name.textContent = sp.displayName || sp.name;
+          opt.append(name);
+          opt.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            if (atMax) return notify(`Maximum ${GCHAT_SPACES_MAX} spaces allowed`, true);
+            selectSpace(sp);
+          });
+          dd.appendChild(opt);
+        }
+      }
+
+      // Stored space entries are { name, display_name }; the picker's are
+      // { name, displayName }. Normalize to the in-memory selection shape.
+      function toSpaceSelection(sp) {
+        return {
+          name: sp.name,
+          display_name: sp.display_name || sp.displayName || "",
+        };
+      }
+
+      function selectSpace(sp) {
+        if (app.spaces.length >= GCHAT_SPACES_MAX) return;
+        if (app.spaces.some((x) => x.name === sp.name)) return;
+        if (!GCHAT_SPACE_NAME_RE.test(sp.name)) return; // defensive
+        app.spaces.push(toSpaceSelection(sp));
+        document.getElementById("space-search").value = "";
+        renderSpaces();
+        renderSpaceDropdown();
+        updateSaveButton();
+      }
+
+      function removeSpace(name) {
+        app.spaces = app.spaces.filter((s) => s.name !== name);
+        renderSpaces();
+        renderSpaceDropdown();
+        updateSaveButton();
+      }
+
+      function renderSpaces() {
+        // Pills via the DOM API — a space name is user data, never innerHTML.
+        const list = document.getElementById("spaces-list");
+        if (!list) return;
+        list.replaceChildren();
+        app.spaces.forEach((sp) => {
+          const pill = document.createElement("span");
+          pill.className = "channel-pill";
+          pill.textContent = sp.display_name || sp.name;
+          const remove = document.createElement("span");
+          remove.className = "remove";
+          remove.textContent = "×";
+          remove.title = "Remove space";
+          remove.setAttribute("role", "button");
+          remove.setAttribute("aria-label", `Remove ${sp.display_name || sp.name}`);
+          remove.addEventListener("click", () => removeSpace(sp.name));
+          pill.appendChild(remove);
+          list.appendChild(pill);
+        });
+
+        const n = app.spaces.length;
+        document.getElementById("space-picker").style.display =
+          n >= GCHAT_SPACES_MAX ? "none" : "block";
+        const count = document.getElementById("space-count");
+        if (count) {
+          count.style.display = n ? "block" : "none";
+          count.textContent =
+            n >= GCHAT_SPACES_MAX
+              ? `${GCHAT_SPACES_MAX}/${GCHAT_SPACES_MAX} spaces selected. Remove one to add another.`
+              : n
+                ? `${n}/${GCHAT_SPACES_MAX} spaces selected`
+                : "";
         }
       }
 
@@ -2389,7 +2748,7 @@
         const hint = document.getElementById("mention-hint");
         const reconnectBtn = document.getElementById("btn-mention-reconnect");
         if (!hint) return;
-        if (app.destination === "email") {
+        if (app.destination !== "slack") {
           hint.textContent = "Any editor of this file can change this note.";
           hint.style.color = "";
           if (reconnectBtn) reconnectBtn.style.display = "none";
@@ -2458,7 +2817,7 @@
         const frag = document.createDocumentFragment();
         // An email note is plain text: nothing in it pings, so nothing is
         // painted as a token.
-        const mentions = app.destination === "email" ? [] : app.customMentions;
+        const mentions = app.destination !== "slack" ? [] : app.customMentions;
         for (const seg of mentionSegments(text, mentions)) {
           const piece = text.slice(seg.start, seg.end);
           if (seg.mention) {
@@ -2496,7 +2855,7 @@
       // start. Modifier deletes (word/line) and IME composition stay native.
       function deleteMentionAtCaret(e) {
         if (e.key !== "Backspace" && e.key !== "Delete") return;
-        if (app.destination === "email") return; // plain note: no tokens to delete
+        if (app.destination !== "slack") return; // plain note: no tokens to delete
         if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.isComposing) return;
         const ta = e.target;
         if (ta.selectionStart !== ta.selectionEnd) return;
@@ -2710,6 +3069,13 @@
           search.addEventListener("blur", () => setTimeout(closeDropdown, 150));
         }
 
+        const spaceSearch = document.getElementById("space-search");
+        if (spaceSearch) {
+          spaceSearch.addEventListener("focus", openSpaceDropdown);
+          spaceSearch.addEventListener("input", renderSpaceDropdown);
+          spaceSearch.addEventListener("blur", () => setTimeout(closeSpaceDropdown, 150));
+        }
+
         const ta = document.getElementById("custom-message");
         if (ta) {
           ta.addEventListener("input", onMentionInput);
@@ -2750,6 +3116,8 @@
             parsed.invalid.length === 0;
         } else if (app.destination === "slack") {
           targetsReady = app.channels.length >= 1 && app.slackConnected;
+        } else if (app.destination === "gchat") {
+          targetsReady = app.spaces.length >= 1 && app.gchatConnected;
         }
 
         btn.disabled = !(hasFile && targetsReady && app.figmaConnected);
@@ -2764,11 +3132,8 @@
         const editing = !!app.configId;
         const dest = app.destination;
         const isEmail = dest === "email";
-        const savedDest = app.currentConfig
-          ? app.currentConfig.destination === "email"
-            ? "email"
-            : "slack"
-          : null;
+        const isGchat = dest === "gchat";
+        const savedDest = app.currentConfig ? savedDestinationOf(app.currentConfig) : null;
         const switching = editing && savedDest !== dest;
 
         // Moving a file to another destination removes the old one's targets
@@ -2776,9 +3141,7 @@
         if (switching && confirmedSwitch !== true) {
           armConfirm(
             btn,
-            isEmail
-              ? "Switch to email? Slack channels will be removed."
-              : "Switch to Slack? Email recipients will be removed.",
+            `Switch to ${DEST_NAMES[dest]}? ${DEST_TARGETS[savedDest] || "The current targets"} will be removed.`,
             () => saveConfig(true),
           );
           return;
@@ -2790,7 +3153,7 @@
         // Optional team note: plain text + (Slack only) the picker-chosen
         // mentions still present in it. The backend re-validates both.
         const noteText = (document.getElementById("custom-message")?.value || "").trim();
-        const noteMentions = noteText && !isEmail ? pruneMentions(noteText) : [];
+        const noteMentions = noteText && dest === "slack" ? pruneMentions(noteText) : [];
 
         const body = { fileKey: app.fileKey, destination: dest };
         if (!editing) {
@@ -2801,6 +3164,15 @@
           body.emailRecipients = parseEmailInput(
             document.getElementById("email-input").value,
           ).valid;
+          body.timezone = currentTimezone();
+        } else if (isGchat) {
+          // The Google account is named at creation and when a file moves to
+          // Google Chat; another editor's ordinary edit keeps the setter's.
+          if (!editing || switching) body.googleInstallationId = app.gchatInstallationId;
+          body.gchatSpaces = app.spaces.map((sp) => ({
+            name: sp.name,
+            display_name: sp.display_name || "",
+          }));
           body.timezone = currentTimezone();
         } else {
           // The workspace is named at creation and when a file moves to Slack;
@@ -2830,7 +3202,9 @@
 
           const config = await readJson(res);
           setStorage("config_id", config.id);
-          const said = savedMessage(editing, isEmail, config.emailConfirmations);
+          const said = isGchat
+            ? savedChatMessage(editing, config.spaceMemberships)
+            : savedMessage(editing, isEmail, config.emailConfirmations);
           notify(said.text, said.isError);
           showSharedConfig(config, config.isOwner === true);
         } catch (e) {
@@ -2871,15 +3245,46 @@
         return { text, isError: false };
       }
 
+      // What to tell the user after a Google Chat save: whether Library Pulse
+      // could be added to the newly chosen spaces with their Google account.
+      function savedChatMessage(editing, memberships) {
+        const m = memberships || { added: 0, failed: 0, errors: [] };
+        const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+        if (m.added === 0 && m.failed === 0) {
+          return { text: editing ? "Spaces updated." : "Saved.", isError: false };
+        }
+        if (m.failed === 0) {
+          return {
+            text: `Saved. Library Pulse was added to ${plural(m.added, "space", "spaces")}.`,
+            isError: false,
+          };
+        }
+        const revoked = (m.errors || []).includes("google_revoked");
+        return {
+          text: revoked
+            ? "Saved, but your Google sign-in has expired. Reconnect Google Chat, then save again."
+            : `Saved, but Library Pulse couldn't be added to ${plural(m.failed, "space", "spaces")}. In Google Chat, open the space, choose Apps & integrations, and add Library Pulse.`,
+          isError: true,
+        };
+      }
+
+      // The destination a saved config uses (rows from before migration 006
+      // have no column and are Slack).
+      function savedDestinationOf(config) {
+        return config?.destination in DEST_NAMES ? config.destination : "slack";
+      }
+
       // ── Shared config view (org-shared, per file) ──
       function showSharedConfig(config, isOwner) {
         app.currentConfig = config;
         app.configId = config.id;
         app.isOwner = isOwner;
         app.channels = (config.channels || []).map(toChannelSelection);
+        app.spaces = (config.gchat_spaces || []).map(toSpaceSelection);
         if (config.slack_team_id) app.slackTeamId = config.slack_team_id;
-        const isEmail = config.destination === "email";
-        app.destination = isEmail ? "email" : "slack";
+        app.destination = savedDestinationOf(config);
+        const isEmail = app.destination === "email";
+        const isGchat = app.destination === "gchat";
 
         // Values ellipsize in CSS; the title attribute keeps the full text
         // reachable on hover.
@@ -2890,33 +3295,44 @@
         };
         setValue("dash-file-name", config.figma_file_name || config.figma_file_key);
         setValue("dash-file-key", config.figma_file_key);
+        const googleAccount = config.google_installations?.google_email || app.gchatEmail;
         setValue(
           "dash-slack-workspace",
           isEmail
             ? "Email"
-            : config.slack_installations?.slack_team_name ||
+            : isGchat
+              ? googleAccount
+                ? `Google Chat · ${googleAccount}`
+                : "Google Chat"
+              : config.slack_installations?.slack_team_name ||
                 app.slackTeamName ||
                 config.slack_team_id ||
                 "—",
         );
+        document.getElementById("dash-channels-label").textContent = isGchat
+          ? "Spaces"
+          : "Channels";
         setValue(
           "dash-channels",
-          (config.channels || []).map((c) => c.name || c.id || c).join(", ") || "—",
+          isGchat
+            ? app.spaces.map((sp) => sp.display_name || sp.name).join(", ") || "—"
+            : (config.channels || []).map((c) => c.name || c.id || c).join(", ") || "—",
         );
 
-        // Slack shows its channels; email shows each address with its
-        // confirmation state, and the zone publish times are shown in.
+        // Slack shows its channels and Google Chat its spaces; email shows each
+        // address with its confirmation state. Email and Chat also show the
+        // zone publish times are rendered in.
         document.getElementById("dash-channels-row").style.display = isEmail ? "none" : "flex";
         document.getElementById("dash-recipients-row").style.display = isEmail ? "block" : "none";
-        document.getElementById("dash-timezone-row").style.display =
-          isEmail && config.email_timezone ? "flex" : "none";
-        if (isEmail) {
-          renderRecipients(config.email_recipients);
-          setValue("dash-timezone", config.email_timezone || "");
-        }
+        const zone = isEmail ? config.email_timezone : isGchat ? config.gchat_timezone : null;
+        document.getElementById("dash-timezone-row").style.display = zone ? "flex" : "none";
+        if (isEmail) renderRecipients(config.email_recipients);
+        setValue("dash-timezone", zone || "");
         document.getElementById("btn-edit-config").textContent = isEmail
           ? "Edit recipients"
-          : "Edit channels";
+          : isGchat
+            ? "Edit spaces"
+            : "Edit channels";
 
         // Team note (org-shared, optional).
         app.customMentions = Array.isArray(config.custom_mentions)
@@ -2988,6 +3404,7 @@
         const btn = document.getElementById("dash-reconnect-btn");
         const status = config.delivery_status || "ok";
         const isEmail = config.destination === "email";
+        const isGchat = config.destination === "gchat";
         const nobodyConfirmed =
           isEmail && !recipientsOf(config).some((r) => r.status === "confirmed");
         banner.style.display = "none";
@@ -2995,14 +3412,15 @@
         btn.style.display = "none";
         btn.onclick = null;
 
-        if (status === "send_failing" && isEmail) {
+        if (status === "send_failing" && (isEmail || isGchat)) {
           badge.textContent = "Deliveries failing";
           badge.className = "badge badge-warning";
           banner.style.display = "block";
           banner.classList.add("banner-warning");
           title.textContent = "Deliveries failing";
-          desc.textContent =
-            "Recent emails couldn't be sent. Check the addresses for typos. We'll try again on the next publish.";
+          desc.textContent = isEmail
+            ? "Recent emails couldn't be sent. Check the addresses for typos. We'll try again on the next publish."
+            : "Recent posts to Google Chat failed. Check that Library Pulse is still a member of the chosen spaces (Apps & integrations in the space). We'll try again on the next publish.";
         } else if (status !== "ok") {
           // One story per state: badge and banner share the same label and
           // hue family (danger for revoked access, warning for failing sends).
@@ -3021,11 +3439,17 @@
                       : "Waiting on the original setter to reconnect Figma.",
                     tone: "danger",
                   }
-                : {
-                    label: "Deliveries failing",
-                    desc: "Slack is connected, but recent sends failed. Check that the chosen channels still exist and the bot can post there.",
-                    tone: "warning",
-                  };
+                : status === "google_revoked"
+                  ? {
+                      label: "Google Chat disconnected",
+                      desc: "The Google sign-in behind this file expired or was revoked. Reconnect Google Chat to resume updates.",
+                      tone: "danger",
+                    }
+                  : {
+                      label: "Deliveries failing",
+                      desc: "Slack is connected, but recent sends failed. Check that the chosen channels still exist and the bot can post there.",
+                      tone: "warning",
+                    };
           badge.textContent = copy.label;
           badge.className = copy.tone === "danger" ? "badge badge-danger" : "badge badge-warning";
           banner.style.display = "block";
@@ -3041,6 +3465,10 @@
           } else if (status === "figma_revoked" && app.isOwner) {
             btn.textContent = "Reconnect Figma";
             btn.onclick = reconnectFigma;
+            btn.style.display = "inline-flex";
+          } else if (status === "google_revoked") {
+            btn.textContent = "Reconnect Google Chat";
+            btn.onclick = reconnectGoogle;
             btn.style.display = "inline-flex";
           }
           // send_failing → informational banner only.
@@ -3083,6 +3511,36 @@
         connectSlack(refreshConfig);
       }
 
+      // Re-run the Google sign-in; the callback clears google_revoked on the
+      // account's configs. Someone other than the person who signed in gets a
+      // fresh installation of their own, so the file is re-saved with it.
+      function reconnectGoogle() {
+        notify("Reconnecting Google Chat — check your browser.");
+        connectGoogle(async () => {
+          const cfg = app.currentConfig;
+          if (cfg && cfg.google_installation_id !== app.gchatInstallationId) {
+            try {
+              const res = await api(`/api/config`, {
+                method: "PUT",
+                body: JSON.stringify({
+                  fileKey: app.fileKey,
+                  googleInstallationId: app.gchatInstallationId,
+                  gchatSpaces: app.spaces,
+                  timezone: currentTimezone(),
+                }),
+              });
+              if (!res.ok) {
+                const err = await readJson(res);
+                throw new Error(friendlyError(err.error) || "Update failed");
+              }
+            } catch (e) {
+              notify(e.message, true);
+            }
+          }
+          refreshConfig();
+        });
+      }
+
       function reconnectFigma() {
         notify("Reconnecting Figma — check your browser.");
         app.figmaConnected = false; // force startFigmaAuto to re-run the OAuth
@@ -3100,6 +3558,12 @@
             return "Connect Figma first.";
           case "slack_reauth_required":
             return "Slack needs reconnecting to enable this (new permissions were added).";
+          case "google_reauth_required":
+            return "Your Google sign-in has expired. Use Connect Google Chat again.";
+          case "google_not_connected":
+            return "Connect Google Chat first.";
+          case "google_installation_forbidden":
+            return "That Google account was connected by someone else. Sign in with your own.";
           case "config_exists":
             return "This file is already set up.";
           default:
@@ -3138,11 +3602,12 @@
         // Reopen setup pre-filled with the shared config's destination, its
         // channels or addresses, and the note. app.configId stays set, so Save
         // does a PUT (edit) rather than a create.
-        app.destination = app.currentConfig?.destination === "email" ? "email" : "slack";
+        app.destination = savedDestinationOf(app.currentConfig);
         document.getElementById("email-input").value = recipientsOf(app.currentConfig)
           .map((r) => r.email)
           .join("\n");
         app.channels = (app.currentConfig?.channels || []).map(toChannelSelection);
+        app.spaces = (app.currentConfig?.gchat_spaces || []).map(toSpaceSelection);
         app.customMentions = Array.isArray(app.currentConfig?.custom_mentions)
           ? app.currentConfig.custom_mentions.map((m) => ({
               id: m.id,
@@ -3164,6 +3629,10 @@
         if (app.destination === "slack") {
           backfillChannelPrivacy();
           loadChannels();
+        }
+        if (app.destination === "gchat") {
+          renderSpaces();
+          loadSpaces();
         }
       }
 

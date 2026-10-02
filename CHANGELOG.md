@@ -17,6 +17,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Google Chat as a destination.** Step 2 gains a live Google Chat card. The user
+  signs in with Google from the plugin (scopes `chat.spaces.readonly`,
+  `chat.memberships.app`, `openid email`), picks up to three spaces they belong to,
+  and Library Pulse adds itself to those spaces; every publish is then posted in
+  them by the Library Pulse app itself, with the same facts as the Slack message
+  and the email. `@Library Pulse help`, `stop` and `start` work in a space, and
+  the dashboard shows "Google Chat disconnected" with a reconnect when Google
+  revokes the sign-in. Requires `database/migrations/007-google-chat.sql`, the
+  `GOOGLE_*` variables and either Workload Identity Federation (`GCP_*`) or a
+  service-account key. Microsoft Teams stays "Coming soon".
 - **Email as a destination.** A file can now notify up to five email addresses
   instead of Slack. Setup step 2 becomes "Choose where to get updates" (Slack or
   Email; Microsoft Teams and Google Chat are listed as coming soon), and step 4

@@ -135,7 +135,22 @@ Only needed for the **email** destination. Library Pulse sends through [Amazon S
 
 Apply `database/migrations/006-email-destination.sql` if your database predates it.
 
-### 5. Deploy the Backend
+### 5. Set up Google Chat (optional)
+
+Only needed for the **Google Chat** destination. Users sign in with Google from the plugin, pick the spaces they belong to, and Library Pulse adds itself to those spaces; updates are then posted by the Library Pulse Chat app itself. Everything below happens in one Google Cloud project owned by a Google Workspace account (the Chat API requires "A Business or Enterprise Google Workspace account").
+
+1. **Cloud project:** create one under your Workspace organisation, enable the **Google Chat API**, and note the **project number**.
+2. **OAuth consent screen** (Google Auth platform): External audience. Branding links: home page, privacy policy and terms on a domain you verified in Search Console. Data Access: add `https://www.googleapis.com/auth/chat.spaces.readonly`, `https://www.googleapis.com/auth/chat.memberships.app`, `openid` and `email`. The two Chat scopes are classed _sensitive_ by Google: while the app is in Testing only listed test users can sign in (their grants expire after 7 days); in production, users see an "unverified app" screen and a lifetime cap of 100 users applies until Google's verification of those scopes completes.
+3. **OAuth client:** Web application, authorized redirect URI `<GOOGLE_PUBLIC_URL>/api/gchat/callback`. Copy the client id and secret into Vercel.
+4. **Chat app configuration** (Chat API → Configuration): clear _Build this Chat app as a Google Workspace add-on_; app name, avatar URL and description; Functionality: _Join spaces and group conversations_; Connection settings: HTTP endpoint URL `<GOOGLE_PUBLIC_URL>/api/gchat/events`, **Authentication Audience: HTTP endpoint URL**; Visibility: the people or groups who may use it (or a Marketplace listing for other organisations); App status: Live.
+5. **The app's own credentials** (to post as the app): a service account in the project, with either
+   - **Workload Identity Federation** from Vercel's OIDC token (no key stored): enable _Secure Backend Access with OIDC Federation_ (Team mode) in the Vercel project; in Google Cloud create a workload identity pool and an OIDC provider with issuer `https://oidc.vercel.com/<team-slug>`, allowed audience `https://vercel.com/<team-slug>`, mapping `google.subject = assertion.sub`; grant the principal `…/subject/owner:<team>:project:<project>:environment:production` the _Workload Identity User_ role on the service account; set `GCP_PROJECT_NUMBER`, `GCP_WORKLOAD_IDENTITY_POOL_ID`, `GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID`, `GCP_SERVICE_ACCOUNT_EMAIL`. Google's docs require billing to be enabled on the project for this, or
+   - a **service-account JSON key** in `GOOGLE_SERVICE_ACCOUNT_KEY` (organisations created on or after 3 May 2024 block key creation by default; an organisation-policy override is needed).
+6. Set `GOOGLE_PUBLIC_URL` to the origin Google talks to (a custom domain on the Vercel project), `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+Apply `database/migrations/007-google-chat.sql` if your database predates it.
+
+### 6. Deploy the Backend
 
 1. Install the Vercel CLI:
 
@@ -170,6 +185,16 @@ Apply `database/migrations/006-email-destination.sql` if your database predates 
    vercel env add SES_SECRET_ACCESS_KEY
    vercel env add EMAIL_FROM              # e.g. Library Pulse <notifications@updates.example.com>
    vercel env add EMAIL_FEEDBACK_ADDRESS  # verified mailbox for replies and bounce/complaint forwards
+
+   # Google Chat destination only (see step 5):
+   vercel env add GOOGLE_PUBLIC_URL       # e.g. https://updates.example.com
+   vercel env add GOOGLE_CLIENT_ID
+   vercel env add GOOGLE_CLIENT_SECRET
+   vercel env add GCP_PROJECT_NUMBER      # Workload Identity Federation…
+   vercel env add GCP_WORKLOAD_IDENTITY_POOL_ID
+   vercel env add GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID
+   vercel env add GCP_SERVICE_ACCOUNT_EMAIL
+   # …or instead a key: vercel env add GOOGLE_SERVICE_ACCOUNT_KEY
    ```
 
 4. Deploy to production:
@@ -180,7 +205,7 @@ Apply `database/migrations/006-email-destination.sql` if your database predates 
 
 5. Update your Slack and Figma app redirect URLs with the actual Vercel domain.
 
-### 6. Install the Figma Plugin
+### 7. Install the Figma Plugin
 
 **For development:**
 
@@ -296,7 +321,8 @@ Sent as HTML with a plain-text alternative. Each list shows up to 20 items, then
 - **Email is opt-in, per address:** an address receives notifications only after its owner confirms from a link sent to that address (double opt-in). Every notification carries an unsubscribe link and one-click unsubscribe headers (RFC 8058). Unsubscribing takes effect immediately, and an editor can't undo it by re-saving the list.
 - **Signed, expiring email links:** confirm and unsubscribe links carry an HMAC-SHA256 token bound to the file's config and the address (confirm links expire after 7 days). Both pages act only when their button is pressed (a `POST`), so mail scanners that follow links can't confirm or unsubscribe anyone.
 - **Bounded sending:** at most 5 addresses per file, 3 confirmation emails per address per day, and 150 notification emails per file per day.
-- **Encrypted at rest:** Slack bot tokens and Figma OAuth tokens are encrypted with AES-256-GCM. The encryption key lives only in a Vercel environment variable.
+- **Google Chat posts as the app, never as a person:** the user's Google token is used only to list their spaces and to add the app to the ones they chose; updates are posted with the app's own credentials (`chat.bot`), obtained through Workload Identity Federation from Vercel's OIDC token so no key has to be stored. Chat's events are accepted only with a valid Google-signed ID token for our endpoint. Text in updates has Chat's `<…>` syntax neutralised, so a component named `<users/all>` can't ping a space.
+- **Encrypted at rest:** Slack bot tokens, Figma OAuth tokens and Google refresh tokens are encrypted with AES-256-GCM. The encryption key lives only in a Vercel environment variable.
 - **Real API auth:** config API calls are authenticated with a signed (HMAC-SHA256) session token minted after Figma OAuth and bound to the Figma user id.
 - **Org-shared access control:** config is keyed by file. The original setter is trusted for their own file; any other user is verified against the file with their own Figma token (`webhooks:read`) before the backend returns or changes that file's shared config.
 - **Webhook authenticity & isolation:** each file webhook has its own high-entropy passcode, verified with a constant-time compare; a valid webhook can only post to the configuration owned by the user who registered it, for the exact file it was registered on.
@@ -309,22 +335,30 @@ See [SECURITY.md](./SECURITY.md) for the full policy and threat model.
 
 ## Environment Variables
 
-| Variable                    | Description                                                                                             |
-| --------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `SUPABASE_URL`              | Supabase project URL                                                                                    |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (full DB access)                                                              |
-| `ENCRYPTION_KEY`            | 64-char hex string for AES-256-GCM encryption                                                           |
-| `SLACK_CLIENT_ID`           | Slack OAuth app client ID                                                                               |
-| `SLACK_CLIENT_SECRET`       | Slack OAuth app client secret                                                                           |
-| `SLACK_SIGNING_SECRET`      | Slack app signing secret                                                                                |
-| `FIGMA_CLIENT_ID`           | Figma OAuth app client ID                                                                               |
-| `FIGMA_CLIENT_SECRET`       | Figma OAuth app client secret                                                                           |
-| `PUBLIC_URL`                | Your deployed Vercel URL (no trailing slash)                                                            |
-| `SES_REGION`                | Email only: AWS region of your SES identity (e.g. `us-east-1`)                                          |
-| `SES_ACCESS_KEY_ID`         | Email only: access key of the IAM user allowed to send                                                  |
-| `SES_SECRET_ACCESS_KEY`     | Email only: that user's secret key                                                                      |
-| `EMAIL_FROM`                | Email only: verified sender, e.g. `Library Pulse <notifications@updates.example.com>`                   |
-| `EMAIL_FEEDBACK_ADDRESS`    | Email only, recommended: verified mailbox that receives replies and SES's bounce and complaint forwards |
+| Variable                                 | Description                                                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_URL`                           | Supabase project URL                                                                                    |
+| `SUPABASE_SERVICE_ROLE_KEY`              | Supabase service role key (full DB access)                                                              |
+| `ENCRYPTION_KEY`                         | 64-char hex string for AES-256-GCM encryption                                                           |
+| `SLACK_CLIENT_ID`                        | Slack OAuth app client ID                                                                               |
+| `SLACK_CLIENT_SECRET`                    | Slack OAuth app client secret                                                                           |
+| `SLACK_SIGNING_SECRET`                   | Slack app signing secret                                                                                |
+| `FIGMA_CLIENT_ID`                        | Figma OAuth app client ID                                                                               |
+| `FIGMA_CLIENT_SECRET`                    | Figma OAuth app client secret                                                                           |
+| `PUBLIC_URL`                             | Your deployed Vercel URL (no trailing slash)                                                            |
+| `SES_REGION`                             | Email only: AWS region of your SES identity (e.g. `us-east-1`)                                          |
+| `SES_ACCESS_KEY_ID`                      | Email only: access key of the IAM user allowed to send                                                  |
+| `SES_SECRET_ACCESS_KEY`                  | Email only: that user's secret key                                                                      |
+| `EMAIL_FROM`                             | Email only: verified sender, e.g. `Library Pulse <notifications@updates.example.com>`                   |
+| `EMAIL_FEEDBACK_ADDRESS`                 | Email only, recommended: verified mailbox that receives replies and SES's bounce and complaint forwards |
+| `GOOGLE_PUBLIC_URL`                      | Google Chat only: the origin Google talks to (redirect URI and Chat endpoint), defaults to `PUBLIC_URL` |
+| `GOOGLE_CLIENT_ID`                       | Google Chat only: OAuth client id (Web application)                                                     |
+| `GOOGLE_CLIENT_SECRET`                   | Google Chat only: that client's secret                                                                  |
+| `GCP_PROJECT_NUMBER`                     | Google Chat only, WIF: the Cloud project number                                                         |
+| `GCP_WORKLOAD_IDENTITY_POOL_ID`          | Google Chat only, WIF: pool id (e.g. `vercel`)                                                          |
+| `GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID` | Google Chat only, WIF: provider id (e.g. `vercel`)                                                      |
+| `GCP_SERVICE_ACCOUNT_EMAIL`              | Google Chat only, WIF: the service account that posts as the app                                        |
+| `GOOGLE_SERVICE_ACCOUNT_KEY`             | Google Chat only, alternative to WIF: the service account's JSON key (raw or base64)                    |
 
 The SES credentials use their own names on purpose. Vercel's function runtime can pre-populate the standard `AWS_*` variables with values that grant no permissions, and the backend passes `SES_*` to the SDK explicitly so the two never mix.
 
@@ -350,9 +384,15 @@ The SES credentials use their own names on purpose. Vercel's function runtime ca
 
 9. **A lost confirmation email** is re-sent by removing the address and adding it again (at most 3 per address per day).
 
-10. **One destination per file.** A file notifies Slack or email, not both.
+10. **One destination per file.** A file notifies Slack, email or Google Chat, not several.
 
-11. **Vercel Hobby allows 12 functions per deployment**, and `backend/api/` has 12. Adding an endpoint means sharing a function (as `/api/email` does) or moving to a paid plan; a test guards the count.
+11. **Vercel Hobby allows 12 functions per deployment**, and `backend/api/` has 8. Related endpoints share a function (`lib/dispatch.js`); a test guards the count.
+
+12. **Google Chat before verification.** The two Chat scopes the sign-in asks for are classed sensitive by Google. Until Google verifies them, an app in production shows an "unverified app" warning and stops at 100 users for the project's lifetime; an app in Testing is limited to listed test users, whose grants expire after 7 days (the plugin then shows "Reconnect Google Chat").
+
+13. **Google Chat shows one time zone per file**, like email: the zone of whoever last saved the spaces.
+
+14. **Google Chat lists named spaces only.** Group chats and direct messages have no display name to pick by, so the picker shows spaces (`spaceType = "SPACE"`).
 
 ---
 
@@ -369,6 +409,7 @@ library-pulse/
 │   │   ├── auth.js                /api/auth/{figma,slack}(-callback), /api/auth-status
 │   │   ├── config.js              /api/config: config CRUD + file-webhook registration/teardown
 │   │   ├── figma.js               /api/figma/resolve-file
+│   │   ├── gchat.js               /api/gchat/{start,callback,spaces,events}
 │   │   ├── slack.js               /api/slack/channels, /api/slack/mentions
 │   │   ├── email.js               Links in emails: ?action=confirm | unsubscribe (GET page, POST acts)
 │   │   ├── webhook.js             Figma LIBRARY_PUBLISH receiver → Slack or email fan-out
@@ -382,8 +423,19 @@ library-pulse/
 │   │   │   ├── auth-figma-callback.js   Figma OAuth callback (mints the session token)
 │   │   │   ├── auth-status.js           Poll OAuth completion
 │   │   │   ├── figma-resolve-file.js    Published-asset key → file id (auto file identification)
+│   │   │   ├── gchat-start.js           Google sign-in initiation
+│   │   │   ├── gchat-callback.js        Google sign-in callback (stores the refresh token)
+│   │   │   ├── gchat-spaces.js          Space-picker directory (spaces.list, user token)
+│   │   │   ├── gchat-events.js          Google Chat interaction events (added, removed, @mention)
 │   │   │   ├── slack-channels.js        Channel-picker directory (conversations.list)
 │   │   │   └── slack-mentions.js        Mention-picker directory (users.list + usergroups.list)
+│   │   ├── google-oauth.js        Google OAuth: authorize URL, code exchange, refresh, ID token
+│   │   ├── google-chat.js         Chat API calls: spaces.list, members.create (users/app), messages.create
+│   │   ├── google-app-auth.js     The app's own token (chat.bot) via Vercel OIDC → WIF, or a key
+│   │   ├── google-installations.js  Connected Google accounts, user tokens, revocation
+│   │   ├── gchat-message.js       The update in Chat markup (mention syntax neutralised)
+│   │   ├── gchat-delivery.js      Add the app to new spaces; per-space deduped fan-out
+│   │   ├── gchat-events.js        Verify Chat's ID token; welcome / help / stop / start
 │   │   ├── supabase.js            Supabase client
 │   │   ├── session.js             HMAC-signed session tokens
 │   │   ├── auth-session.js        OAuth state lifecycle (atomic claim)
