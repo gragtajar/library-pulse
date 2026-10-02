@@ -2,7 +2,7 @@
 /**
  * A small in-memory stand-in for the slice of the Supabase query builder the
  * backend uses: `from().select/insert/update/upsert/delete` with
- * `eq / in / not / gte / order / limit`, awaited directly or finished with
+ * `eq / in / not / is / gt / gte / order / limit`, awaited directly or finished with
  * `single()` / `maybeSingle()`. Rows live in plain arrays so a test can seed
  * them and assert on them afterwards.
  *
@@ -121,6 +121,25 @@ class FakeQuery {
    */
   gte(column, value) {
     this.filters.push((r) => String(r[column]) >= value);
+    return this;
+  }
+
+  /**
+   * @param {string} column
+   * @param {string} value
+   */
+  gt(column, value) {
+    this.filters.push((r) => String(r[column]) > value);
+    return this;
+  }
+
+  /**
+   * `is` compares with null/true/false (PostgREST's IS).
+   * @param {string} column
+   * @param {unknown} value
+   */
+  is(column, value) {
+    this.filters.push((r) => (value === null ? r[column] == null : r[column] === value));
     return this;
   }
 

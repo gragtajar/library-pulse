@@ -48,11 +48,14 @@ import {
 import { assertFileAccess, getFigmaAccessToken } from "../lib/figma-access.js";
 import { planCreate, planUpdate } from "../lib/config-destination.js";
 import { sendConfirmations } from "../lib/email-delivery.js";
+import { ensureAppMemberships } from "../lib/gchat-delivery.js";
+import { getInstallation } from "../lib/google-installations.js";
 
 const PG_UNIQUE_VIOLATION = "23505";
 // Only ever expose non-secret columns to the client. `bot_token_enc` is never
 // selected here; this list documents intent and guards future column additions.
-const CONFIG_SELECT = "*, slack_installations(slack_team_name)";
+const CONFIG_SELECT =
+  "*, slack_installations(slack_team_name), google_installations(google_email, google_hd)";
 
 export default withErrorHandling(
   /**
@@ -151,7 +154,7 @@ async function handlePost(req, res) {
   if (body.customMessage !== undefined) {
     noteFields.custom_message = assertCustomMessage(body.customMessage);
     noteFields.custom_mentions =
-      createPlan.destination === "email" ? [] : assertMentionList(body.customMentions);
+      createPlan.destination !== "slack" ? [] : assertMentionList(body.customMentions);
   }
 
   // One config per file. If it already exists and the caller isn't the setter,
@@ -171,6 +174,7 @@ async function handlePost(req, res) {
     // by the same rules as an edit — retained email addresses keep their
     // confirmation state, only new ones get a confirmation.
     const plan = planUpdate(body, existing);
+    await assertInstallationUsable(callerId, plan.fields.google_installation_id);
     const { data: updated, error: upErr } = await supabase
       .from("configurations")
       .update({
@@ -188,13 +192,19 @@ async function handlePost(req, res) {
     }
     const webhookStatus = await registerWebhookReporting(callerId, fileKey);
     const emailConfirmations = await confirmNewRecipients(updated, plan.addedEmails);
-    return res
-      .status(200)
-      .json({ ...updated, webhookStatus, isOwner: true, ...emailConfirmations });
+    const spaceMemberships = await addAppToSpaces(updated, plan.addedSpaces);
+    return res.status(200).json({
+      ...updated,
+      webhookStatus,
+      isOwner: true,
+      ...emailConfirmations,
+      ...spaceMemberships,
+    });
   }
 
   // ── Create ── Webhook registration (below) is the edit-access gate: Figma
   // requires "Can edit" + webhooks:write to POST /v2/webhooks, so no read probe.
+  await assertInstallationUsable(callerId, createPlan.fields.google_installation_id);
   const { data: config, error: cfgErr } = await supabase
     .from("configurations")
     .insert({
@@ -227,7 +237,10 @@ async function handlePost(req, res) {
 
   const webhookStatus = await registerWebhookReporting(callerId, fileKey);
   const emailConfirmations = await confirmNewRecipients(config, createPlan.addedEmails);
-  return res.status(201).json({ ...config, webhookStatus, isOwner: true, ...emailConfirmations });
+  const spaceMemberships = await addAppToSpaces(config, createPlan.addedSpaces);
+  return res
+    .status(201)
+    .json({ ...config, webhookStatus, isOwner: true, ...emailConfirmations, ...spaceMemberships });
 }
 
 /**
@@ -258,12 +271,13 @@ async function handlePut(req, res) {
   if (body.customMessage !== undefined) {
     updates.custom_message = assertCustomMessage(body.customMessage);
     updates.custom_mentions =
-      plan.destination === "email" ? [] : assertMentionList(body.customMentions);
+      plan.destination !== "slack" ? [] : assertMentionList(body.customMentions);
   }
 
   if (Object.keys(updates).length === 0) {
     throw new ValidationError("No updatable fields provided");
   }
+  await assertInstallationUsable(callerId, updates.google_installation_id);
 
   const { data, error } = await supabase
     .from("configurations")
@@ -277,9 +291,13 @@ async function handlePut(req, res) {
     throw new UpstreamError("config_update_failed");
   }
   const emailConfirmations = await confirmNewRecipients(data, plan.addedEmails);
-  return res
-    .status(200)
-    .json({ ...data, isOwner: row.created_by === callerId, ...emailConfirmations });
+  const spaceMemberships = await addAppToSpaces(data, plan.addedSpaces);
+  return res.status(200).json({
+    ...data,
+    isOwner: row.created_by === callerId,
+    ...emailConfirmations,
+    ...spaceMemberships,
+  });
 }
 
 /**
@@ -344,6 +362,62 @@ async function confirmNewRecipients(config, addedEmails) {
     });
     return { emailConfirmations: { sent: 0, failed: addedEmails.length, skipped: 0 } };
   }
+}
+
+/**
+ * Google Chat: add the app to the spaces this save introduced, with the
+ * token of the Google account on the config. Never throws: the save already
+ * happened; the result tells the plugin which spaces still need attention.
+ *
+ * @param {any} config  the saved row
+ * @param {Array<{ name: string, display_name: string }>} addedSpaces
+ * @returns {Promise<{ spaceMemberships?: { added: number, failed: number, errors: string[] } }>}
+ */
+async function addAppToSpaces(config, addedSpaces) {
+  if (addedSpaces.length === 0) return {};
+  try {
+    const inst = config?.google_installation_id
+      ? await getInstallation(config.google_installation_id)
+      : null;
+    if (!inst) {
+      return {
+        spaceMemberships: {
+          added: 0,
+          failed: addedSpaces.length,
+          errors: addedSpaces.map(() => "google_not_connected"),
+        },
+      };
+    }
+    return { spaceMemberships: await ensureAppMemberships(inst, addedSpaces) };
+  } catch (err) {
+    logger.warn("gchat_memberships_failed", {
+      config_id: config?.id,
+      reason: err instanceof Error ? err.message : String(err),
+    });
+    return {
+      spaceMemberships: {
+        added: 0,
+        failed: addedSpaces.length,
+        errors: addedSpaces.map(() => "unknown"),
+      },
+    };
+  }
+}
+
+/**
+ * A Google account can only be put on a config by the Figma user who signed
+ * in with it (installation ids are unguessable UUIDs, but this rules out
+ * reusing one that leaked). Called whenever a write names an installation.
+ *
+ * @param {string} callerId
+ * @param {unknown} installationId
+ */
+async function assertInstallationUsable(callerId, installationId) {
+  if (installationId === undefined || installationId === null) return;
+  const inst = await getInstallation(String(installationId));
+  if (!inst) throw new NotFoundError("google_not_connected");
+  if (inst.figma_user_id !== callerId) throw new ForbiddenError("google_installation_forbidden");
+  if (inst.revoked_at) throw new ValidationError("google_reauth_required");
 }
 
 /**

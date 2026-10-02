@@ -25,6 +25,10 @@ vi.mock("../backend/lib/handlers/slack-mentions.js", () => ({ default: stub("men
 vi.mock("../backend/lib/handlers/figma-resolve-file.js", () => ({
   default: stub("resolve-file"),
 }));
+vi.mock("../backend/lib/handlers/gchat-start.js", () => ({ default: stub("start") }));
+vi.mock("../backend/lib/handlers/gchat-callback.js", () => ({ default: stub("callback") }));
+vi.mock("../backend/lib/handlers/gchat-spaces.js", () => ({ default: stub("spaces") }));
+vi.mock("../backend/lib/handlers/gchat-events.js", () => ({ default: stub("events") }));
 
 /**
  * @param {Record<string, unknown>} query
@@ -105,6 +109,16 @@ describe("the grouped Functions", () => {
     const res = createFakeResponse();
     await figma(request({ fn: "resolve-file" }, "POST"), /** @type {any} */ (res));
     expect(res.body).toEqual({ handler: "resolve-file" });
+  });
+
+  it("api/gchat.js reaches the four Google Chat handlers", async () => {
+    const { default: gchat } = await import("../backend/api/gchat.js");
+    expect(gchat.handlers).toEqual(["start", "callback", "spaces", "events"]);
+    for (const fn of gchat.handlers) {
+      const res = createFakeResponse();
+      await gchat(request({ fn }), /** @type {any} */ (res));
+      expect(res.body).toEqual({ handler: fn });
+    }
   });
 
   it("hands the request through untouched", async () => {

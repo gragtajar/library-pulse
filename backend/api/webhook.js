@@ -26,6 +26,7 @@ import { fetchWithTimeout, withErrorHandling } from "../lib/http.js";
 import { logger } from "../lib/logger.js";
 import { deliveryStatusFor } from "../lib/delivery-status.js";
 import { sendPublishEmails } from "../lib/email-delivery.js";
+import { sendPublishChats } from "../lib/gchat-delivery.js";
 
 const SLACK_POST_CONCURRENCY = 4;
 
@@ -153,6 +154,28 @@ export default withErrorHandling(
         continue;
       }
 
+      // Google Chat destination (migration 007): one post per chosen space, as
+      // the app, deduped per space like channels are.
+      if (/** @type {any} */ (config).destination === "gchat") {
+        const r = await sendPublishChats({ config, payload, fileKey, eventKey });
+        await updateDeliveryStatus(config, r.errorCodes, r.failed);
+        logger.info("webhook_config_dispatched", {
+          config_id: config.id,
+          destination: "gchat",
+          sent: r.sent,
+          failed: r.failed,
+          skipped: r.skipped,
+          total: r.total,
+        });
+        allResults.push({
+          configId: config.id,
+          sent: r.sent,
+          failed: r.failed,
+          skipped: r.skipped,
+        });
+        continue;
+      }
+
       const tokenEnc = /** @type {any} */ (config.slack_installations)?.bot_token_enc;
       if (!tokenEnc) {
         logger.warn("webhook_config_missing_token", { config_id: config.id });
@@ -233,7 +256,8 @@ export default withErrorHandling(
 /**
  * Update a config's delivery_status after a fan-out. Slack auth errors →
  * 'slack_revoked'; other failures → 'send_failing'; all-good → 'ok'. Writes only
- * on change, and never clears a 'figma_revoked' flag on a healthy Slack send.
+ * on change, and never clears a 'figma_revoked' or 'google_revoked' flag on a
+ * healthy send (those are set by token failures, a different axis).
  *
  * @param {{ id: string, delivery_status?: string }} config
  * @param {string[]} errorCodes
@@ -243,7 +267,7 @@ async function updateDeliveryStatus(config, errorCodes, failed) {
   const { status, lastError } = deliveryStatusFor(errorCodes, failed);
   const current = config.delivery_status ?? "ok";
   if (current === status) return;
-  if (status === "ok" && current === "figma_revoked") return; // different axis
+  if (status === "ok" && (current === "figma_revoked" || current === "google_revoked")) return;
 
   const { error } = await supabase
     .from("configurations")

@@ -16,6 +16,10 @@
     { "src": "/api/slack/channels", "dest": "/api/slack.js?fn=channels" },
     { "src": "/api/slack/mentions", "dest": "/api/slack.js?fn=mentions" },
     { "src": "/api/figma/resolve-file", "dest": "/api/figma.js?fn=resolve-file" },
+    { "src": "/api/gchat/start", "dest": "/api/gchat.js?fn=start" },
+    { "src": "/api/gchat/callback", "dest": "/api/gchat.js?fn=callback" },
+    { "src": "/api/gchat/spaces", "dest": "/api/gchat.js?fn=spaces" },
+    { "src": "/api/gchat/events", "dest": "/api/gchat.js?fn=events" },
     { "src": "/api/email", "dest": "/api/email.js" },
     { "src": "/api/webhook", "dest": "/api/webhook.js" },
     { "src": "/api/health", "dest": "/api/health.js" }

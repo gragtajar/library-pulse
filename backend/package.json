@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1142.0",
-    "@supabase/supabase-js": "^2.45.0"
+    "@supabase/supabase-js": "^2.45.0",
+    "@vercel/oidc": "^3.8.9",
+    "google-auth-library": "^11.1.0"
   }
 }

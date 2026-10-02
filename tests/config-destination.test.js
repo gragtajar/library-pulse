@@ -35,6 +35,9 @@ describe("planCreate", () => {
       destination: "slack",
       email_recipients: [],
       email_timezone: null,
+      google_installation_id: null,
+      gchat_spaces: [],
+      gchat_timezone: null,
     });
   });
 
@@ -58,6 +61,9 @@ describe("planCreate", () => {
       destination: "email",
       slack_team_id: null,
       channels: [],
+      google_installation_id: null,
+      gchat_spaces: [],
+      gchat_timezone: null,
       email_recipients: [pending("ana@example.com"), pending("ben@example.com")],
       email_timezone: "Asia/Kolkata",
     });
@@ -150,6 +156,9 @@ describe("planUpdate — switching destination", () => {
       destination: "email",
       slack_team_id: null,
       channels: [],
+      google_installation_id: null,
+      gchat_spaces: [],
+      gchat_timezone: null,
       custom_mentions: [],
       email_recipients: [pending("ana@example.com")],
       email_timezone: "Asia/Kolkata",
@@ -178,6 +187,9 @@ describe("planUpdate — switching destination", () => {
       channels: CHANNELS,
       email_recipients: [],
       email_timezone: null,
+      google_installation_id: null,
+      gchat_spaces: [],
+      gchat_timezone: null,
       delivery_status: "ok",
       last_delivery_error: null,
     });
