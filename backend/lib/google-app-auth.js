@@ -13,6 +13,13 @@
  *
  * google-auth-library caches the token and refreshes it before expiry; the
  * client lives for the life of the function instance.
+ *
+ * Where Vercel's OIDC token comes from: Vercel's docs guarantee it on every
+ * invocation as the `x-vercel-oidc-token` request header. @vercel/oidc looks
+ * for it in a per-request context instead, and Vercel's open-source Node
+ * runtime fills that context with `waitUntil` only. So the webhook hands the
+ * header over (`rememberVercelOidcToken`), and the library's own lookup is the
+ * fallback.
  */
 
 import { ExternalAccountClient, JWT } from "google-auth-library";
@@ -20,6 +27,33 @@ import { getVercelOidcToken } from "@vercel/oidc";
 import { logger } from "./logger.js";
 
 export const CHAT_BOT_SCOPE = "https://www.googleapis.com/auth/chat.bot";
+
+// Three base64url segments: a JWT. Anything else isn't Vercel's token.
+const JWT_SHAPE = /^[\w-]+\.[\w-]+\.[\w-]+$/;
+
+/** Vercel's OIDC token for this deployment, as last seen on a request. */
+let requestOidcToken = "";
+
+/**
+ * Remember the OIDC token Vercel attaches to an invocation. The token names
+ * the project and environment, not the caller, and Vercel reuses one token
+ * across invocations, so keeping the latest is safe when requests overlap.
+ *
+ * @param {Record<string, string | string[] | undefined> | undefined} headers
+ */
+export function rememberVercelOidcToken(headers) {
+  const raw = headers?.["x-vercel-oidc-token"];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value === "string" && value.length < 8192 && JWT_SHAPE.test(value)) {
+    requestOidcToken = value;
+  }
+}
+
+/** The subject token for the federation exchange: the header, else the library. */
+export async function vercelSubjectToken() {
+  if (requestOidcToken) return requestOidcToken;
+  return getVercelOidcToken();
+}
 
 export class AppAuthError extends Error {
   /** @param {string} code @param {string} [detail] */
@@ -100,9 +134,8 @@ function wifClient() {
     token_url: "https://sts.googleapis.com/v1/token",
     service_account_impersonation_url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${serviceAccount}:generateAccessToken`,
     subject_token_supplier: {
-      // Vercel's OIDC token for this deployment (the request's
-      // x-vercel-oidc-token header, or VERCEL_OIDC_TOKEN locally).
-      getSubjectToken: () => getVercelOidcToken(),
+      // Vercel's OIDC token for this deployment (see the note at the top).
+      getSubjectToken: () => vercelSubjectToken(),
     },
   });
   if (!external) throw new AppAuthError("app_auth_wif_config");
@@ -110,7 +143,8 @@ function wifClient() {
   return external;
 }
 
-/** Test seam: forget the cached client. */
+/** Test seam: forget the cached client and the remembered token. */
 export function _resetAppAuthClient() {
   client = null;
+  requestOidcToken = "";
 }

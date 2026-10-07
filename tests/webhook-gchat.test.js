@@ -38,6 +38,7 @@ vi.mock("../backend/lib/gchat-delivery.js", async (importOriginal) => {
 });
 
 import handler from "../backend/api/webhook.js";
+import { _resetAppAuthClient, vercelSubjectToken } from "../backend/lib/google-app-auth.js";
 import { createFakeResponse } from "./helpers/fake-supabase.js";
 
 const FILE = "abcDEF123456";
@@ -53,13 +54,14 @@ const PAYLOAD = {
   created_components: [{ key: "k1", name: "Button" }],
 };
 
-async function publish() {
+/** @param {Record<string, string>} [extraHeaders] */
+async function publish(extraHeaders = {}) {
   const res = createFakeResponse();
   await handler(
     /** @type {any} */ ({
       method: "POST",
       url: "/api/webhook",
-      headers: { "x-figma-passcode": PASSCODE },
+      headers: { "x-figma-passcode": PASSCODE, ...extraHeaders },
       query: {},
       body: PAYLOAD,
     }),
@@ -157,6 +159,19 @@ describe("POST /api/webhook — Google Chat config", () => {
     seed({ delivery_status: "google_revoked", last_delivery_error: "invalid_grant" });
     await publish();
     expect(h.db.tables.configurations[0].delivery_status).toBe("google_revoked");
+  });
+
+  it("hands Vercel's OIDC token from the request to the app's Google sign-in", async () => {
+    seed();
+    _resetAppAuthClient();
+    h.sendPublishChats.mockImplementationOnce(async () => {
+      // By the time the fan-out runs, the token on this request is the one used.
+      expect(await vercelSubjectToken()).toBe("hdr.oidc.token");
+      return { sent: 2, failed: 0, skipped: 0, total: 2, errorCodes: [] };
+    });
+    const res = await publish({ "x-vercel-oidc-token": "hdr.oidc.token" });
+    expect(res.statusCode).toBe(200);
+    expect(h.sendPublishChats).toHaveBeenCalledTimes(1);
   });
 
   it("skips an inactive config", async () => {
