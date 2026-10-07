@@ -27,6 +27,7 @@ import { logger } from "../lib/logger.js";
 import { deliveryStatusFor } from "../lib/delivery-status.js";
 import { sendPublishEmails } from "../lib/email-delivery.js";
 import { sendPublishChats } from "../lib/gchat-delivery.js";
+import { rememberVercelOidcToken } from "../lib/google-app-auth.js";
 
 const SLACK_POST_CONCURRENCY = 4;
 
@@ -40,6 +41,10 @@ export default withErrorHandling(
       return res.status(200).json({ status: "ok", service: "library-pulse-webhook" });
     }
     if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+    // Google Chat posts authenticate as the app with Vercel's OIDC token,
+    // which arrives on this request (lib/google-app-auth.js).
+    rememberVercelOidcToken(req.headers);
 
     /** @type {any} */
     const payload = req.body ?? {};
