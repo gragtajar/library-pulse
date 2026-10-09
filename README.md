@@ -3,9 +3,9 @@
 [![CI](https://github.com/gragtajar/library-pulse/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/gragtajar/library-pulse/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-**Figma plugin that tells your team, in Slack or by email, whenever a Figma library is published.**
+**Figma plugin that tells your team, in Slack, in Google Chat or by email, whenever a Figma library is published.**
 
-When someone on your team publishes changes to a Figma library (components, styles, variables), Library Pulse posts a detailed Slack message, or emails up to five addresses, listing everything that was added, modified, or removed, along with who published and the description they entered. Each file uses one destination: Slack or email.
+When someone on your team publishes changes to a Figma library (components, styles, variables), Library Pulse posts a detailed message in Slack or Google Chat, or emails up to five addresses, listing everything that was added, modified, or removed, along with who published and the description they entered. Each file uses one destination: Slack, Google Chat or email.
 
 > **Install:** _Library Pulse is live on the Figma Community._ (Listing URL goes here.)
 
@@ -45,9 +45,9 @@ When someone on your team publishes changes to a Figma library (components, styl
 
 **Three components:**
 
-1. **Figma Plugin** — runs inside Figma; handles Figma + Slack OAuth, file selection, the destination choice (Slack or email), and the channels or addresses.
-2. **Vercel Backend** — serverless functions for OAuth callbacks, configuration CRUD, receiving Figma webhook events, and the confirm/unsubscribe links in emails. It posts to Slack and sends email through Amazon SES.
-3. **Supabase Database** — stores encrypted Slack bot tokens, Figma OAuth tokens, webhook registrations, and the per-file configurations (including each email address and whether it has confirmed).
+1. **Figma Plugin** — runs inside Figma; handles the Figma, Slack and Google sign-ins, file selection, the destination choice (Slack, Google Chat or email), and the channels, spaces or addresses.
+2. **Vercel Backend** — serverless functions for OAuth callbacks, configuration CRUD, receiving Figma webhook events, Google Chat's app events, and the confirm/unsubscribe links in emails. It posts to Slack and Google Chat and sends email through Amazon SES.
+3. **Supabase Database** — stores encrypted Slack bot tokens, Google refresh tokens and Figma OAuth tokens, webhook registrations, and the per-file configurations (including each email address and whether it has confirmed).
 
 Configuration is **org-shared per file**: anyone with edit access to a file manages that file's single shared config. Each user authorizes Figma with three scopes — `webhooks:write` (register the `LIBRARY_PUBLISH` webhook on the file), `webhooks:read` (list a file's webhooks to confirm a user can access it before showing or editing that file's shared config), and `library_assets:read` (resolve one of the open file's published component/style keys to the file's id — Figma doesn't expose file ids to public Community plugins, so the plugin identifies the file from its own published assets, with no manual input). The backend registers a **file-context** webhook using the setter's own access — no shared admin token, no team-admin requirement.
 
@@ -227,15 +227,16 @@ Apply `database/migrations/007-google-chat.sql` and `database/migrations/008-goo
 The plugin walks you through four numbered steps:
 
 1. **Connect Figma** — automatic on open. A browser tab opens once so you can authorize the app (scopes: `webhooks:write`, `webhooks:read`, `library_assets:read`); no need to sign in again.
-2. **Choose where to get updates** — **Slack** or **Email**, one per file (you can switch later). Choosing Slack shows **Connect to Slack**, an OAuth flow in your browser. Email has nothing to connect. Microsoft Teams and Google Chat are shown as "Coming soon".
+2. **Choose where to get updates** — a list of **Slack** (up to 3 channels), **Google Chat** (up to 3 spaces) and **Email** (up to 5 addresses), one per file (you can switch later). Choosing Slack shows **Connect to Slack**, an OAuth flow in your browser. Choosing Google Chat shows **Connect Google Chat**, a Google sign-in in your browser; Google lists the two Chat permissions with a checkbox each, and both must be selected (the plugin says so before you sign in). Email has nothing to connect.
 3. **Select file** — the file you have open is **identified automatically**: Figma doesn't expose file ids to Community plugins, so the plugin resolves one of the file's own published component/style keys to its file id via the backend. (A library that has never been published shows "publish it once, then Refresh".) There's no way to target a different file.
-4. **Add channels or addresses** — depending on step 2:
+4. **Add channels, spaces or addresses** — depending on step 2:
    - **Slack:** pick 1–3 channels from a **searchable dropdown** (sorted by member count; `#` public, 🔒 private). Optionally add a **custom message** posted with every notification — type `@` to mention people or user groups from a searchable picker (they're pinged in Slack).
+   - **Google Chat:** pick 1–3 named spaces you belong to from a **searchable dropdown**. When you save, Library Pulse adds itself to each new space. The optional custom message is posted with every update.
    - **Email:** type 1–5 addresses, one per line or separated by commas. They are checked as you type, and a live counter (`2/5 addresses`) shows how many of the five are used. Each new address is sent a **confirmation email** and only receives updates once its owner confirms. The optional custom message is included in every email as plain text.
 
    Then **Save & Activate** — the backend registers a `LIBRARY_PUBLISH` webhook on that file using your Figma authorization.
 
-If the file already has a config, anyone with edit access sees the same **shared config** and can edit its channels or addresses and its custom message — they don't start from a blank setup. For email, the dashboard lists every address with its state (Confirmed, Pending, Unsubscribed). Switching a file between Slack and email asks for a second click, because it removes the other destination's channels or addresses for everyone. Only the **original setter** can remove the Figma connection (delete the file's webhook); any editor can pause/disable notifications.
+If the file already has a config, anyone with edit access sees the same **shared config** and can edit its channels, spaces or addresses and its custom message — they don't start from a blank setup. For email, the dashboard lists every address with its state (Confirmed, Pending, Unsubscribed). Switching a file to another destination asks for a second click, because it removes the current destination's channels, spaces or addresses for everyone. Only the **original setter** can remove the Figma connection (delete the file's webhook); any editor can pause/disable notifications.
 
 ### When a library is published
 
@@ -243,7 +244,8 @@ If the file already has a config, anyone with edit access sees the same **shared
 2. The backend verifies the passcode (bound to the specific webhook and its file), then looks up the file's single active configuration.
 3. **Slack config:** it decrypts the stored Slack bot token and posts a rich Block Kit message to the configured channels (de-duplicated per channel so retries never double-post). The team's custom message — with real `@` mentions for picker-chosen people/groups — is included; publish times render in **each viewer's own timezone** (Slack date token). If Slack rejects the token, the config is flagged so the plugin can show a "reconnect" banner.
 4. **Email config:** it sends one email per **confirmed** address through Amazon SES (de-duplicated per recipient, so a retry never emails anyone twice). The publish time is shown in the time zone saved with the address list. Every email has an unsubscribe link and one-click unsubscribe headers. If sends fail, the config is flagged so the plugin shows a "Deliveries failing" banner.
-5. Each notification is logged to the `notification_log` table.
+5. **Google Chat config:** it posts the update in each chosen space as the Library Pulse app (de-duplicated per space, so a retry never posts twice). Spaces that removed the app, or were paused with `@Library Pulse stop`, are skipped. The publish time is shown in the time zone saved with the spaces. If posts fail, the config is flagged so the plugin shows a "Deliveries failing" banner.
+6. Each notification is logged to the `notification_log` table.
 
 ---
 

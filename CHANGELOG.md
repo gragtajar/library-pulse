@@ -20,6 +20,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **Step 2 lists the destinations as a stacked list: Slack, Google Chat, Email.**
+  Each row shows its limit (up to 3 channels, 3 spaces, 5 addresses). The
+  Microsoft Teams "Coming soon" card is gone until Teams is fully built. The
+  Google Chat row and the Connect Google Chat button use Google's official Chat
+  logo, embedded as a data URI (Figma's plugin CSP allows `data:`). Step 4's
+  title before a choice is now "Add channels, spaces or addresses".
+- **The Google sign-in says which permissions to select.** Google's consent
+  screen gives each Chat permission its own checkbox and has no way to
+  pre-select them (granular consent), so before sign-in the plugin says to
+  select both and what each is for. If one is left unselected, the plugin and
+  the browser page both say how to retry, and the Connect button keeps its logo.
 - **Backend grouped into 7 Vercel Functions (was 12).** The Hobby plan caps
   Functions per deployment, and the backend had reached the cap. The OAuth
   endpoints, the two Slack picker endpoints and the file resolver now share one
@@ -38,10 +49,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the dashboard shows "Google Chat disconnected" with a reconnect when Google
   revokes the sign-in. Requires `database/migrations/007-google-chat.sql`, the
   `GOOGLE_*` variables and either Workload Identity Federation (`GCP_*`) or a
-  service-account key. Microsoft Teams stays "Coming soon".
+  service-account key.
 - **Email as a destination.** A file can now notify up to five email addresses
-  instead of Slack. Setup step 2 becomes "Choose where to get updates" (Slack or
-  Email; Microsoft Teams and Google Chat are listed as coming soon), and step 4
+  instead of Slack. Setup step 2 becomes "Choose where to get updates", and step 4
   asks for channels or addresses accordingly. Addresses are validated as they
   are typed, with a live `N/5` counter. Each address confirms by email before it
   receives anything (double opt-in), every email has an unsubscribe link and

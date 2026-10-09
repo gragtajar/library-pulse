@@ -64,14 +64,15 @@ export default withErrorHandling(
       });
     }
 
-    // The consent screen lets a user untick scopes; without both Chat scopes
-    // nothing downstream works, so say so now rather than at the picker.
+    // The consent screen gives each Chat scope its own checkbox, and Google
+    // offers no way to pre-select them; without both nothing downstream
+    // works, so say so now, with the way back, rather than at the picker.
     if (!hasRequiredGoogleScopes(tokens.scope)) {
       await finalizeAuthSession(state, "failed", { error: "scopes_declined" });
       return renderResultPage(res, {
         success: false,
         message:
-          "Library Pulse needs both Google Chat permissions (view your spaces, and add itself to a space). Please try again and allow both.",
+          "Library Pulse needs both Google Chat permissions: one lists your spaces, the other lets it add itself to the spaces you pick. Go back to Figma, click Connect Google Chat again and select all the permissions Google lists.",
       });
     }
     if (!tokens.refreshToken) {

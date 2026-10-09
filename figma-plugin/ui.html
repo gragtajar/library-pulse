@@ -263,6 +263,11 @@
         color: var(--figma-color-text-secondary, #666);
         margin-top: 3px;
       }
+      /* The one instruction in a hint that must not be missed. */
+      .hint strong {
+        font-weight: 600;
+        color: var(--figma-color-text, #333);
+      }
 
       /* ── Channel pills ── */
       .channels-list {
@@ -504,13 +509,13 @@
       }
 
       /* ── Destination picker (step 2) ──
-         A one-of-N choice as a radio group of cards. The chosen card takes
-         the file card's selected treatment (brand border + tint), so "this
-         one is picked" reads the same everywhere. Destinations that aren't
-         available yet stay legible but quiet: secondary text, no hover. */
-      .dest-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+         A one-of-N choice as a radio group: a stacked list, one row per
+         destination with its limit on the right. The chosen row takes the
+         file card's selected treatment (brand border + tint), so "this one
+         is picked" reads the same everywhere. */
+      .dest-list {
+        display: flex;
+        flex-direction: column;
         gap: 6px;
         margin-bottom: 8px;
       }
@@ -518,6 +523,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
+        width: 100%;
         min-width: 0;
         padding: 8px 10px;
         font: inherit;
@@ -538,8 +544,9 @@
         border-color: var(--figma-color-bg-brand, #0d99ff);
         background: var(--lp-selected-tint);
       }
-      /* Not available (yet): recessed onto the secondary surface with no
-         outline, so it reads as part of the panel rather than a control. */
+      /* Locked until Figma connects: recessed onto the secondary surface
+         with no outline, so it reads as part of the panel rather than a
+         control. */
       .dest-option:disabled {
         cursor: not-allowed;
         color: var(--figma-color-text-secondary, #666);
@@ -551,17 +558,15 @@
         flex-shrink: 0;
         color: var(--figma-color-text-secondary, #666);
       }
-      .dest-text {
-        min-width: 0;
-      }
       .dest-name,
       .dest-meta {
-        display: block;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .dest-name {
+        flex: 1;
+        min-width: 0;
         font-size: 12px;
         font-weight: 500;
       }
@@ -569,8 +574,21 @@
         font-weight: 400;
       }
       .dest-meta {
+        flex-shrink: 0;
         font-size: 11px;
         color: var(--figma-color-text-secondary, #666);
+      }
+      /* Google Chat's official logo, the file Google's own Chat page uses
+         (gstatic.com/images/branding/productlogos/chat_2026/v2/web/192px.svg).
+         Embedded as an image: Figma's plugin CSP allows data: URIs, and the
+         logo's internal ids (mask "a", gradient "b") stay out of this page. */
+      .gchat-logo {
+        display: inline-block;
+        flex-shrink: 0;
+        width: 16px;
+        height: 16px;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' fill='none'%3E%3Crect width='160' height='96' x='16' y='28' fill='%2300AF57' rx='48'/%3E%3Cpath fill='%230EBC5F' d='M133 48c28.167 0 51 22.834 51 51 0 28.167-22.833 51-51 51H96.624l-34.857 23.064c-3.86 2.544-5.789 3.816-7.372 3.92a6 6 0 0 1-5.612-3.022C48 172.583 48 170.271 48 165.649V148.81C25.121 143.78 8 123.39 8 99c0-28.166 22.834-51 51-51h74z'/%3E%3Cmask id='a' width='176' height='129' x='8' y='48' maskUnits='userSpaceOnUse' style='mask-type:alpha'%3E%3Cpath fill='%230EBC5F' d='M133 48c28.167 0 51 22.834 51 51 0 28.167-22.833 51-51 51H96.722l-39.428 25.896c-3.99 2.62-9.294-.242-9.294-5.015V148.81C25.121 143.78 8 123.39 8 99c0-28.166 22.834-51 51-51h74z'/%3E%3C/mask%3E%3Cg mask='url(%23a)'%3E%3Crect width='160' height='96' x='16' y='28' fill='%230EBC5F' rx='48'/%3E%3Crect width='160' height='96' x='16' y='28' fill='url(%23b)' rx='48'/%3E%3Cpath stroke='%23fff' stroke-linecap='round' stroke-width='12' d='M62 94s8.84 18 34 18 34-17.182 34-17.182'/%3E%3C/g%3E%3Cdefs%3E%3ClinearGradient id='b' x1='96' x2='96' y1='28' y2='124' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='.09' stop-color='%2394D4FF'/%3E%3Cstop offset='.28' stop-color='%2378C9FF'/%3E%3Cstop offset='.88' stop-color='%2301AE58' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3C/svg%3E")
+          center / contain no-repeat;
       }
 
       /* ── Spinner ── */
@@ -780,7 +798,7 @@
       <!-- ════════════════════════════════════════ -->
       <div id="view-setup" class="view">
         <p class="subtitle">
-          Get Slack, email or Google Chat updates when your Figma library is published.
+          Get Slack, Google Chat or email updates when your Figma library is published.
         </p>
 
         <!-- Figma account — connected automatically from your Figma login -->
@@ -805,16 +823,15 @@
           </div>
         </div>
 
-        <!-- Step 2: Choose the destination — one per file. Slack, email and
-             Google Chat today; the "Coming soon" card marks where Microsoft
-             Teams will land. -->
+        <!-- Step 2: Choose the destination, one per file: Slack, Google Chat
+             or email, each row showing how many targets it takes. -->
         <div class="step" id="step-dest">
           <div class="step-num pending" id="step-dest-num">2</div>
           <div class="step-content">
             <div class="step-title" id="dest-title">Choose where to get updates</div>
             <div class="step-desc">Pick one. You can switch later.</div>
 
-            <div class="dest-grid" id="dest-grid" role="radiogroup" aria-labelledby="dest-title">
+            <div class="dest-list" id="dest-list" role="radiogroup" aria-labelledby="dest-title">
               <button
                 type="button"
                 class="dest-option"
@@ -843,10 +860,22 @@
                     />
                   </svg>
                 </span>
-                <span class="dest-text">
-                  <span class="dest-name">Slack</span>
-                  <span class="dest-meta">Up to 3 channels</span>
+                <span class="dest-name">Slack</span>
+                <span class="dest-meta">Up to 3 channels</span>
+              </button>
+              <button
+                type="button"
+                class="dest-option"
+                role="radio"
+                aria-checked="false"
+                data-dest="gchat"
+                disabled
+              >
+                <span class="dest-icon" aria-hidden="true">
+                  <span class="gchat-logo"></span>
                 </span>
+                <span class="dest-name">Google Chat</span>
+                <span class="dest-meta">Up to 3 spaces</span>
               </button>
               <button
                 type="button"
@@ -870,68 +899,8 @@
                     <path d="M2.4 4.7 8 8.9l5.6-4.2" />
                   </svg>
                 </span>
-                <span class="dest-text">
-                  <span class="dest-name">Email</span>
-                  <span class="dest-meta">Up to 5 addresses</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                class="dest-option"
-                role="radio"
-                aria-checked="false"
-                data-dest="teams"
-                data-soon="1"
-                disabled
-              >
-                <span class="dest-icon" aria-hidden="true">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.4"
-                    stroke-linecap="round"
-                  >
-                    <circle cx="5.8" cy="5.4" r="2.3" />
-                    <path d="M1.9 13.2c.4-2.6 1.9-4 3.9-4s3.5 1.4 3.9 4" />
-                    <circle cx="11.6" cy="5.9" r="1.9" />
-                    <path d="M11.2 9.4c1.6.1 2.8 1.3 3.1 3.6" />
-                  </svg>
-                </span>
-                <span class="dest-text">
-                  <span class="dest-name">Microsoft Teams</span>
-                  <span class="dest-meta">Coming soon</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                class="dest-option"
-                role="radio"
-                aria-checked="false"
-                data-dest="gchat"
-                disabled
-              >
-                <span class="dest-icon" aria-hidden="true">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.4"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M2.2 3.6A1.6 1.6 0 0 1 3.8 2h8.4a1.6 1.6 0 0 1 1.6 1.6v5.8a1.6 1.6 0 0 1-1.6 1.6H7.3l-2.9 2.6V11h-.6a1.6 1.6 0 0 1-1.6-1.6z"
-                    />
-                  </svg>
-                </span>
-                <span class="dest-text">
-                  <span class="dest-name">Google Chat</span>
-                  <span class="dest-meta">Up to 3 spaces</span>
-                </span>
+                <span class="dest-name">Email</span>
+                <span class="dest-meta">Up to 5 addresses</span>
               </button>
             </div>
 
@@ -981,24 +950,21 @@
                 onclick="connectGoogle()"
                 disabled
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.4"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M2.2 3.6A1.6 1.6 0 0 1 3.8 2h8.4a1.6 1.6 0 0 1 1.6 1.6v5.8a1.6 1.6 0 0 1-1.6 1.6H7.3l-2.9 2.6V11h-.6a1.6 1.6 0 0 1-1.6-1.6z"
-                  />
-                </svg>
+                <span class="gchat-logo" aria-hidden="true"></span>
                 Connect Google Chat
               </button>
-              <div class="hint" id="gchat-connect-hint" style="margin-top: 6px">
-                Sign in with the Google Workspace account that belongs to the spaces you want.
+              <!-- Google shows each Chat permission with its own checkbox and
+                   has no way to pre-select them (granular consent), so say
+                   what to select before the user gets there. -->
+              <div id="gchat-connect-hint">
+                <div class="hint" style="margin-top: 6px">
+                  Sign in with the Google Workspace account that belongs to the spaces you want.
+                </div>
+                <div class="hint">
+                  On Google's permissions screen,
+                  <strong>select both Google Chat permissions</strong>. One lists your spaces here,
+                  the other lets Library Pulse add itself to the spaces you pick.
+                </div>
               </div>
               <div id="gchat-status" style="margin-top: 8px"></div>
             </div>
@@ -1035,13 +1001,13 @@
           </div>
         </div>
 
-        <!-- Step 4: The destination's targets — Slack channels or email
-             addresses, whichever step 2 chose. -->
+        <!-- Step 4: The destination's targets — Slack channels, Google Chat
+             spaces or email addresses, whichever step 2 chose. -->
         <div class="step" id="step-channels">
           <div class="step-num pending" id="step-channels-num">4</div>
           <div class="step-content">
             <div class="step-title">
-              <span id="step-targets-name">Add channels or addresses</span>
+              <span id="step-targets-name">Add channels, spaces or addresses</span>
               <span
                 id="step-targets-range"
                 style="font-weight: 400; color: var(--figma-color-text-secondary, #666)"
@@ -1293,7 +1259,7 @@
       // is first-time setup before a destination is picked).
       const TARGETS_COPY = {
         none: {
-          name: "Add channels or addresses",
+          name: "Add channels, spaces or addresses",
           range: "",
           desc: "Depends on the destination you choose in step 2.",
           notePlaceholder: "",
@@ -1731,17 +1697,17 @@
       // Paint step 2's radio group and everything that follows the choice:
       // which connect affordance shows, and step 4's panel and copy.
       function renderDestination() {
-        const options = Array.from(document.querySelectorAll("#dest-grid .dest-option"));
+        const options = Array.from(document.querySelectorAll("#dest-list .dest-option"));
         let tabStop = null;
         for (const btn of options) {
           const checked = btn.dataset.dest === app.destination;
-          btn.disabled = btn.dataset.soon === "1" || !app.figmaConnected;
+          btn.disabled = !app.figmaConnected;
           btn.setAttribute("aria-checked", checked ? "true" : "false");
           btn.tabIndex = -1;
           if (!btn.disabled && (checked || !tabStop)) tabStop = checked ? btn : tabStop || btn;
         }
-        // Radio-group keyboard model: one tab stop (the chosen card, or the
-        // first available one); arrow keys move between cards.
+        // Radio-group keyboard model: one tab stop (the chosen row, or the
+        // first available one); arrow keys move between rows.
         const chosen = options.find((b) => !b.disabled && b.dataset.dest === app.destination);
         if (chosen || tabStop) (chosen || tabStop).tabIndex = 0;
 
@@ -1778,7 +1744,7 @@
       function onDestinationKeydown(e) {
         const keys = ["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"];
         if (!keys.includes(e.key)) return;
-        const enabled = Array.from(document.querySelectorAll("#dest-grid .dest-option")).filter(
+        const enabled = Array.from(document.querySelectorAll("#dest-list .dest-option")).filter(
           (b) => !b.disabled,
         );
         const at = enabled.indexOf(document.activeElement);
@@ -2155,6 +2121,16 @@
       // sign-in and consent; we poll until the callback completes the session.
       let googlePollTimer = null;
 
+      // Back to "Connect Google Chat", logo included, after a sign-in that
+      // failed, timed out or never started.
+      function resetGoogleButton(btn) {
+        const logo = document.createElement("span");
+        logo.className = "gchat-logo";
+        logo.setAttribute("aria-hidden", "true");
+        btn.replaceChildren(logo, "Connect Google Chat");
+        btn.disabled = false;
+      }
+
       async function connectGoogle(onDone) {
         const btn = document.getElementById("btn-connect-gchat");
         if (!app.sessionToken) {
@@ -2201,12 +2177,11 @@
               } else if (statusData.status === "failed") {
                 clearInterval(googlePollTimer);
                 googlePollTimer = null;
-                btn.disabled = false;
-                btn.textContent = "Connect Google Chat";
+                resetGoogleButton(btn);
                 setStatus(
                   "gchat-status",
                   statusData.data?.error === "scopes_declined"
-                    ? "Both Google Chat permissions are needed. Try again and allow both."
+                    ? "Library Pulse needs both Google Chat permissions. Connect again and select all the permissions Google lists."
                     : "Sign-in failed. Try again.",
                   true,
                 );
@@ -2220,14 +2195,12 @@
             if (googlePollTimer) {
               clearInterval(googlePollTimer);
               googlePollTimer = null;
-              btn.disabled = false;
-              btn.textContent = "Connect Google Chat";
+              resetGoogleButton(btn);
               setStatus("gchat-status", "Timed out. Please try again.", true);
             }
           }, 180000);
         } catch (e) {
-          btn.disabled = false;
-          btn.textContent = "Connect Google Chat";
+          resetGoogleButton(btn);
           setStatus(
             "gchat-status",
             e && e.message ? e.message : "Connection error. Check your network.",
@@ -3044,13 +3017,13 @@
       // Wire the destination picker, the address box, the channel search box
       // and the mention composer.
       document.addEventListener("DOMContentLoaded", () => {
-        const grid = document.getElementById("dest-grid");
-        if (grid) {
-          grid.addEventListener("click", (e) => {
+        const destList = document.getElementById("dest-list");
+        if (destList) {
+          destList.addEventListener("click", (e) => {
             const btn = e.target.closest(".dest-option");
             if (btn && !btn.disabled) selectDestination(btn.dataset.dest);
           });
-          grid.addEventListener("keydown", onDestinationKeydown);
+          destList.addEventListener("keydown", onDestinationKeydown);
         }
 
         const emails = document.getElementById("email-input");
