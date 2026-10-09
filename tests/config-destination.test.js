@@ -29,15 +29,11 @@ describe("planCreate", () => {
 
   it("writes the destination columns when the build names the destination", () => {
     const plan = planCreate({ destination: "slack", slackTeamId: "T0123", channels: CHANNELS });
+    // Only its own columns: the others keep their empty defaults.
     expect(plan.fields).toEqual({
       slack_team_id: "T0123",
       channels: CHANNELS,
       destination: "slack",
-      email_recipients: [],
-      email_timezone: null,
-      google_installation_id: null,
-      gchat_spaces: [],
-      gchat_timezone: null,
     });
   });
 
@@ -59,11 +55,6 @@ describe("planCreate", () => {
     expect(plan.destination).toBe("email");
     expect(plan.fields).toEqual({
       destination: "email",
-      slack_team_id: null,
-      channels: [],
-      google_installation_id: null,
-      gchat_spaces: [],
-      gchat_timezone: null,
       email_recipients: [pending("ana@example.com"), pending("ben@example.com")],
       email_timezone: "Asia/Kolkata",
     });
@@ -152,13 +143,11 @@ describe("planUpdate — switching destination", () => {
       NOW,
     );
     expect(plan.destination).toBe("email");
+    // Clears the destination it leaves, and nothing else.
     expect(plan.fields).toEqual({
       destination: "email",
       slack_team_id: null,
       channels: [],
-      google_installation_id: null,
-      gchat_spaces: [],
-      gchat_timezone: null,
       custom_mentions: [],
       email_recipients: [pending("ana@example.com")],
       email_timezone: "Asia/Kolkata",
@@ -187,9 +176,6 @@ describe("planUpdate — switching destination", () => {
       channels: CHANNELS,
       email_recipients: [],
       email_timezone: null,
-      google_installation_id: null,
-      gchat_spaces: [],
-      gchat_timezone: null,
       delivery_status: "ok",
       last_delivery_error: null,
     });
@@ -215,5 +201,97 @@ describe("planUpdate — switching destination", () => {
     );
     expect(back.fields.email_recipients).toEqual([pending("ana@example.com")]);
     expect(back.addedEmails).toEqual(["ana@example.com"]);
+  });
+});
+
+describe("Google Chat: a write names only the destinations it involves", () => {
+  const INST = "0b1c2d3e-4f50-4a2e-9d1c-6f1c1b4e6d0b";
+  const SPACES = [{ name: "spaces/AAA", display_name: "Design" }];
+  const GCHAT_ROW = {
+    destination: "gchat",
+    google_installation_id: INST,
+    gchat_spaces: SPACES,
+  };
+
+  it("a new Google Chat config writes only its own columns", () => {
+    const plan = planCreate({
+      destination: "gchat",
+      googleInstallationId: INST,
+      gchatSpaces: SPACES,
+      timezone: "UTC",
+    });
+    expect(plan.fields).toEqual({
+      destination: "gchat",
+      google_installation_id: INST,
+      gchat_spaces: SPACES,
+      gchat_timezone: "UTC",
+    });
+    expect(plan.addedSpaces).toEqual(SPACES);
+  });
+
+  it("Slack → Google Chat clears Slack only", () => {
+    const plan = planUpdate(
+      { destination: "gchat", googleInstallationId: INST, gchatSpaces: SPACES, timezone: "UTC" },
+      { destination: "slack" },
+    );
+    expect(plan.fields).toEqual({
+      destination: "gchat",
+      slack_team_id: null,
+      channels: [],
+      custom_mentions: [],
+      google_installation_id: INST,
+      gchat_spaces: SPACES,
+      gchat_timezone: "UTC",
+      delivery_status: "ok",
+      last_delivery_error: null,
+    });
+  });
+
+  it("email → Google Chat clears email only", () => {
+    const plan = planUpdate(
+      { destination: "gchat", googleInstallationId: INST, gchatSpaces: SPACES, timezone: "UTC" },
+      { destination: "email", email_recipients: [confirmed("ana@example.com")] },
+    );
+    expect(plan.fields).not.toHaveProperty("slack_team_id");
+    expect(plan.fields).toMatchObject({ email_recipients: [], email_timezone: null });
+  });
+
+  it("Google Chat → email and → Slack clear Google Chat only", () => {
+    const toEmail = planUpdate(
+      { destination: "email", emailRecipients: ["ana@example.com"], timezone: "UTC" },
+      GCHAT_ROW,
+      NOW,
+    );
+    expect(toEmail.fields).toMatchObject({
+      google_installation_id: null,
+      gchat_spaces: [],
+      gchat_timezone: null,
+    });
+    expect(toEmail.fields).not.toHaveProperty("slack_team_id");
+
+    const toSlack = planUpdate(
+      { destination: "slack", slackTeamId: "T0123", channels: CHANNELS },
+      GCHAT_ROW,
+    );
+    expect(toSlack.fields).toMatchObject({
+      google_installation_id: null,
+      gchat_spaces: [],
+      gchat_timezone: null,
+    });
+    expect(toSlack.fields).not.toHaveProperty("email_recipients");
+  });
+
+  it("staying on email or Slack never names a Google Chat column", () => {
+    const email = planUpdate(
+      { emailRecipients: ["ana@example.com"], timezone: "UTC" },
+      { destination: "email", email_recipients: [] },
+      NOW,
+    );
+    const slack = planUpdate({ channels: CHANNELS }, { destination: "slack" });
+    for (const plan of [email, slack]) {
+      for (const col of ["google_installation_id", "gchat_spaces", "gchat_timezone"]) {
+        expect(plan.fields).not.toHaveProperty(col);
+      }
+    }
   });
 });

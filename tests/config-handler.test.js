@@ -158,9 +158,12 @@ describe("POST /api/config — Slack", () => {
       destination: "slack",
       slack_team_id: "T0123",
       channels: CHANNELS,
-      email_recipients: [],
-      email_timezone: null,
     });
+    // A new config names only its own destination's columns; the others keep
+    // their (empty) column defaults, and a missing one can't fail the save.
+    for (const col of ["email_recipients", "email_timezone", "gchat_spaces", "gchat_timezone"]) {
+      expect(configs()[0]).not.toHaveProperty(col);
+    }
   });
 
   it("still requires a workspace and 1–3 channels", async () => {
@@ -190,12 +193,13 @@ describe("POST /api/config — email", () => {
     expect(res.body.emailConfirmations).toEqual({ sent: 2, failed: 0, skipped: 0 });
     expect(configs()[0]).toMatchObject({
       destination: "email",
-      slack_team_id: null,
-      channels: [],
       email_timezone: "Asia/Kolkata",
       custom_message: "See the changelog",
       custom_mentions: [], // mentions are Slack-only, whatever the client sent
     });
+    for (const col of ["slack_team_id", "channels", "google_installation_id", "gchat_spaces"]) {
+      expect(configs()[0]).not.toHaveProperty(col);
+    }
     expect(configs()[0]?.email_recipients).toEqual([
       expect.objectContaining({ email: "ana@example.com", status: "pending", confirmed_at: null }),
       expect.objectContaining({ email: "ben@example.com", status: "pending", confirmed_at: null }),

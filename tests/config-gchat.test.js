@@ -133,12 +133,12 @@ describe("POST /api/config — Google Chat", () => {
       google_installation_id: INST,
       gchat_spaces: SPACES,
       gchat_timezone: "Asia/Kolkata",
-      slack_team_id: null,
-      channels: [],
-      email_recipients: [],
       custom_message: "Heads up @PJ",
       custom_mentions: [], // mentions are Slack-only
     });
+    for (const col of ["slack_team_id", "channels", "email_recipients", "email_timezone"]) {
+      expect(configs()[0]).not.toHaveProperty(col);
+    }
     expect(h.ensureAppMemberships).toHaveBeenCalledTimes(1);
     expect(h.ensureAppMemberships.mock.calls[0][0]).toMatchObject({ id: INST });
     expect(h.ensureAppMemberships.mock.calls[0][1]).toEqual(SPACES);

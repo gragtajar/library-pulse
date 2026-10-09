@@ -148,7 +148,7 @@ Only needed for the **Google Chat** destination. Users sign in with Google from 
    - a **service-account JSON key** in `GOOGLE_SERVICE_ACCOUNT_KEY` (organisations created on or after 3 May 2024 block key creation by default; an organisation-policy override is needed).
 6. Set `GOOGLE_PUBLIC_URL` to the origin Google talks to (a custom domain on the Vercel project), `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
-Apply `database/migrations/007-google-chat.sql` if your database predates it.
+Apply `database/migrations/007-google-chat.sql` and `database/migrations/008-google-chat-columns.sql` if your database predates them (008 adds two columns that an early copy of 007 lacked; it is safe to run either way).
 
 ### 6. Deploy the Backend
 

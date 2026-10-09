@@ -10,6 +10,10 @@
  * Deploy-order safety: a request that never mentions `destination` (every
  * plugin build before this feature) only ever touches the columns those
  * builds always wrote, so the backend can ship before the migration runs.
+ * And a write names only the columns of the destinations it involves: a new
+ * config writes its own (the others keep their empty column defaults), and a
+ * switch clears only the destination it leaves. So a column missing for one
+ * destination (a migration not yet applied) can't fail another's saves.
  */
 
 import { ValidationError } from "./errors.js";
@@ -33,7 +37,7 @@ import { mergeRecipients, normalizeRecipientList } from "./email-recipients.js";
  * @property {Space[]} addedSpaces   spaces the app still has to be added to
  */
 
-/** The columns each destination owns; switching clears the other two. */
+/** The columns each destination owns, empty; a switch clears the ones it leaves. */
 const EMPTY = {
   slack: { slack_team_id: null, channels: [] },
   email: { email_recipients: [], email_timezone: null },
@@ -58,8 +62,6 @@ export function planCreate(body, now) {
       destination,
       fields: {
         destination,
-        ...EMPTY.slack,
-        ...EMPTY.gchat,
         email_recipients: recipients,
         email_timezone: timezone,
       },
@@ -74,8 +76,6 @@ export function planCreate(body, now) {
       destination,
       fields: {
         destination,
-        ...EMPTY.slack,
-        ...EMPTY.email,
         google_installation_id: assertInstallationId(body.googleInstallationId),
         gchat_spaces: spaces,
         gchat_timezone: assertTimezone(body.timezone),
@@ -93,8 +93,8 @@ export function planCreate(body, now) {
     fields: {
       slack_team_id: slackTeamId,
       channels,
-      // Only a build that knows about destinations writes the new columns.
-      ...(body.destination !== undefined ? { destination, ...EMPTY.email, ...EMPTY.gchat } : {}),
+      // Only a build that knows about destinations writes the new column.
+      ...(body.destination !== undefined ? { destination } : {}),
     },
     addedEmails: [],
     addedSpaces: [],
@@ -149,7 +149,7 @@ export function planUpdate(body, existing, now) {
       fields.email_timezone = assertTimezone(body.timezone);
     }
     if (switching) {
-      Object.assign(fields, { destination: "email" }, EMPTY.slack, EMPTY.gchat);
+      Object.assign(fields, { destination: "email" }, EMPTY[current]);
       fields.custom_mentions = []; // mentions are a Slack-only concept
     }
   } else if (target === "gchat") {
@@ -170,13 +170,13 @@ export function planUpdate(body, existing, now) {
       fields.google_installation_id = assertInstallationId(body.googleInstallationId);
     }
     if (switching) {
-      Object.assign(fields, { destination: "gchat" }, EMPTY.slack, EMPTY.email);
+      Object.assign(fields, { destination: "gchat" }, EMPTY[current]);
       fields.custom_mentions = [];
     }
   } else if (switching) {
     const slackTeamId = typeof body.slackTeamId === "string" ? body.slackTeamId : "";
     if (!slackTeamId) throw new ValidationError("Missing slackTeamId");
-    Object.assign(fields, { destination: "slack" }, EMPTY.email, EMPTY.gchat);
+    Object.assign(fields, { destination: "slack" }, EMPTY[current]);
     fields.slack_team_id = slackTeamId;
     fields.channels = assertChannelList(body.channels);
   } else {
