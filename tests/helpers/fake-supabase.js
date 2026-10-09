@@ -8,6 +8,10 @@
  *
  * It does not resolve embedded relations (`slack_installations(...)`): seed
  * the nested object on the row when a test needs one.
+ *
+ * `db.columns[table]`, when set, lists the columns that table has; a write
+ * naming any other column fails the way PostgREST does (PGRST204), so a test
+ * can run against a database that is missing a migration.
  */
 
 /**
@@ -18,6 +22,7 @@
  *   unique: Record<string, string>,
  *   failCounts: boolean,
  *   failUpdates: boolean,
+ *   columns: Record<string, Set<string>>,
  *   from: (name: string) => FakeQuery,
  *   reset: (tables?: Record<string, Row[]>) => void,
  * }} FakeSupabase
@@ -190,6 +195,20 @@ class FakeQuery {
   async run() {
     const payload = this.payload ?? {};
 
+    const known = this.db.columns[this.table];
+    if (known && (this.op === "insert" || this.op === "update" || this.op === "upsert")) {
+      const missing = Object.keys(payload).find((c) => !known.has(c));
+      if (missing) {
+        return {
+          data: null,
+          error: {
+            code: "PGRST204",
+            message: `Could not find the '${missing}' column of '${this.table}' in the schema cache`,
+          },
+        };
+      }
+    }
+
     if (this.op === "insert") {
       const key = this.db.unique[this.table];
       if (key && this.rows.some((r) => r[key] === payload[key])) {
@@ -242,6 +261,7 @@ export function createFakeSupabase(tables = {}) {
     unique: { configurations: "figma_file_key", webhook_events: "event_key" },
     failCounts: false,
     failUpdates: false,
+    columns: {},
     from(name) {
       if (!db.tables[name]) db.tables[name] = [];
       return new FakeQuery(name, /** @type {Row[]} */ (db.tables[name]), db);
@@ -250,6 +270,7 @@ export function createFakeSupabase(tables = {}) {
       db.tables = next;
       db.failCounts = false;
       db.failUpdates = false;
+      db.columns = {};
     },
   };
   return db;

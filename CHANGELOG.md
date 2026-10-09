@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **"Upstream service error" when saving email or Google Chat.** Production had
+  run an early copy of migration 007 that lacked `configurations.gchat_timezone`
+  and `gchat_spaces.muted`, and every save from the current plugin named the
+  Google Chat columns, even for email and Slack, so each failed with PGRST204.
+  `database/migrations/008-google-chat-columns.sql` adds the two columns
+  (idempotent) and reloads PostgREST's schema cache; a save now names only the
+  columns of the destinations it involves, so email and Slack saves no longer
+  depend on Google Chat's. `database/schema.sql` now includes migrations 007
+  and 008.
+
 ### Changed
 
 - **Backend grouped into 7 Vercel Functions (was 12).** The Hobby plan caps
