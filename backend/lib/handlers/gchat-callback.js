@@ -72,7 +72,7 @@ export default withErrorHandling(
       return renderResultPage(res, {
         success: false,
         message:
-          "Library Pulse needs both Google Chat permissions: one lists your spaces, the other lets it add itself to the spaces you pick. Go back to Figma, click Connect Google Chat again and select all the permissions Google lists.",
+          "Library Pulse needs both Google Chat permissions: one lists your spaces, the other lets it add itself to the spaces you pick. Go back to Figma, click Sign in with Google again and select all the permissions Google lists.",
       });
     }
     if (!tokens.refreshToken) {
