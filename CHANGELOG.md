@@ -23,14 +23,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Step 2 lists the destinations as a stacked list: Slack, Google Chat, Email.**
   Each row shows its limit (up to 3 channels, 3 spaces, 5 addresses). The
   Microsoft Teams "Coming soon" card is gone until Teams is fully built. The
-  Google Chat row and the Connect Google Chat button use Google's official Chat
-  logo, embedded as a data URI (Figma's plugin CSP allows `data:`). Step 4's
-  title before a choice is now "Add channels, spaces or addresses".
+  Google Chat row uses Google's official Chat logo, embedded as a data URI
+  (Figma's plugin CSP allows `data:`). Step 4's title before a choice is now
+  "Add channels, spaces or addresses".
+- **Google sign-in uses Google's own "Sign in with Google" button**, built to
+  Google's sign-in branding guidelines, which app verification requires. It is
+  the HTML and CSS Google's button configurator generates (standard,
+  rectangular; light theme, dark theme in Figma's dark mode) with the type the
+  guidelines specify, Google Sans Medium 14/20, embedded as a 2 KB subset
+  (SIL Open Font License; the license travels in `ui.html`). It replaces
+  "Connect Google Chat" in setup and "Reconnect Google Chat" on the dashboard.
+  The button never carries other text: while signing in it only disables, and
+  once signed in a separate status button shows "Connected as …".
 - **The Google sign-in says which permissions to select.** Google's consent
   screen gives each Chat permission its own checkbox and has no way to
   pre-select them (granular consent), so before sign-in the plugin says to
   select both and what each is for. If one is left unselected, the plugin and
-  the browser page both say how to retry, and the Connect button keeps its logo.
+  the browser page both say how to retry.
 - **Backend grouped into 7 Vercel Functions (was 12).** The Hobby plan caps
   Functions per deployment, and the backend had reached the cap. The OAuth
   endpoints, the two Slack picker endpoints and the file resolver now share one

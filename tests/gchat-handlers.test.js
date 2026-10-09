@@ -201,7 +201,7 @@ describe("GET /api/gchat/callback", () => {
     const res = await call("callback", { as: null, query: { code: "c", state: STATE } });
     expect(String(res.body)).toContain("both Google Chat permissions");
     expect(String(res.body)).toContain(
-      "click Connect Google Chat again and select all the permissions Google lists",
+      "click Sign in with Google again and select all the permissions Google lists",
     );
     expect(installs()).toHaveLength(0);
     expect(sessions()[0]).toMatchObject({

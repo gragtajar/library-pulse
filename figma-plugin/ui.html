@@ -591,6 +591,247 @@
           center / contain no-repeat;
       }
 
+      /* ── Sign in with Google ──
+         Google's own button, as its branding guidelines require for app
+         verification (developers.google.com/identity/branding-guidelines):
+         the HTML and CSS its configurator generates for the standard,
+         rectangular "Sign in with Google" button, light theme, with the dark
+         theme's values under Figma's dark mode. One change from the
+         generated CSS: the type is what the guidelines specify, Google Sans
+         Medium 14/20 (the generator writes Roboto and no line height), the
+         font embedded because the plugin can't load web fonts. Size, colors,
+         padding, states and the "G" are all specified by Google: don't
+         restyle this button. */
+      @font-face {
+        font-family: "Google Sans";
+        font-style: normal;
+        font-weight: 500;
+        src: url(data:font/woff2;base64,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)
+          format("woff2");
+        unicode-range: U+20, U+47, U+53, U+65, U+67-69, U+6c, U+6e-6f, U+74, U+77;
+      }
+      .gsi-material-button {
+        -moz-user-select: none;
+        -webkit-user-select: none;
+        -ms-user-select: none;
+        -webkit-appearance: none;
+        background-color: WHITE;
+        background-image: none;
+        border: 1px solid #747775;
+        -webkit-border-radius: 4px;
+        border-radius: 4px;
+        -webkit-box-sizing: border-box;
+        box-sizing: border-box;
+        color: #1f1f1f;
+        cursor: pointer;
+        font-family: "Google Sans", arial, sans-serif;
+        font-size: 14px;
+        height: 40px;
+        letter-spacing: 0.25px;
+        outline: none;
+        overflow: hidden;
+        padding: 0 12px;
+        position: relative;
+        text-align: center;
+        -webkit-transition:
+          background-color 0.218s,
+          border-color 0.218s,
+          box-shadow 0.218s;
+        transition:
+          background-color 0.218s,
+          border-color 0.218s,
+          box-shadow 0.218s;
+        vertical-align: middle;
+        white-space: nowrap;
+        width: auto;
+        max-width: 400px;
+        min-width: min-content;
+      }
+      .gsi-material-button .gsi-material-button-icon {
+        height: 20px;
+        margin-right: 10px;
+        min-width: 20px;
+        width: 20px;
+      }
+      .gsi-material-button .gsi-material-button-content-wrapper {
+        -webkit-align-items: center;
+        align-items: center;
+        display: flex;
+        -webkit-flex-direction: row;
+        flex-direction: row;
+        -webkit-flex-wrap: nowrap;
+        flex-wrap: nowrap;
+        height: 100%;
+        justify-content: space-between;
+        position: relative;
+        width: 100%;
+      }
+      .gsi-material-button .gsi-material-button-contents {
+        -webkit-flex-grow: 1;
+        flex-grow: 1;
+        font-family: "Google Sans", arial, sans-serif;
+        font-weight: 500;
+        line-height: 20px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: top;
+      }
+      .gsi-material-button .gsi-material-button-state {
+        -webkit-transition: opacity 0.218s;
+        transition: opacity 0.218s;
+        bottom: 0;
+        left: 0;
+        opacity: 0;
+        position: absolute;
+        right: 0;
+        top: 0;
+      }
+      .gsi-material-button:disabled {
+        cursor: default;
+        background-color: #ffffff61;
+        border-color: #1f1f1f1f;
+      }
+      .gsi-material-button:disabled .gsi-material-button-contents {
+        opacity: 38%;
+      }
+      .gsi-material-button:disabled .gsi-material-button-icon {
+        opacity: 38%;
+      }
+      .gsi-material-button:not(:disabled):active .gsi-material-button-state,
+      .gsi-material-button:not(:disabled):focus .gsi-material-button-state {
+        background-color: #303030;
+        opacity: 12%;
+      }
+      .gsi-material-button:not(:disabled):hover {
+        -webkit-box-shadow:
+          0 1px 2px 0 rgba(60, 64, 67, 0.3),
+          0 1px 3px 1px rgba(60, 64, 67, 0.15);
+        box-shadow:
+          0 1px 2px 0 rgba(60, 64, 67, 0.3),
+          0 1px 3px 1px rgba(60, 64, 67, 0.15);
+      }
+      .gsi-material-button:not(:disabled):hover .gsi-material-button-state {
+        background-color: #303030;
+        opacity: 8%;
+      }
+      /* The generator's dark theme. */
+      .figma-dark .gsi-material-button {
+        background-color: #131314;
+        border-color: #8e918f;
+        color: #e3e3e3;
+      }
+      .figma-dark .gsi-material-button:disabled {
+        background-color: #13131461;
+        border-color: #8e918f1f;
+      }
+      .figma-dark .gsi-material-button:disabled .gsi-material-button-state {
+        background-color: #e3e3e31f;
+      }
+      .figma-dark .gsi-material-button:not(:disabled):active .gsi-material-button-state,
+      .figma-dark .gsi-material-button:not(:disabled):focus .gsi-material-button-state,
+      .figma-dark .gsi-material-button:not(:disabled):hover .gsi-material-button-state {
+        background-color: white;
+      }
+      /* The Google Sans above is the subset fonts.googleapis.com serves for
+         css2?family=Google+Sans:wght@500&text=Sign%20in%20with%20Google
+         (only those glyphs, unmodified). Its license, which must travel
+         with the font:
+
+         Copyright 2025 The Google Sans Project Authors (https://github.com/googlefonts/googlesans)
+
+         This Font Software is licensed under the SIL Open Font License, Version 1.1.
+         This license is copied below, and is also available with a FAQ at:
+         https://openfontlicense.org
+
+
+         -----------------------------------------------------------
+         SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+         -----------------------------------------------------------
+
+         PREAMBLE
+         The goals of the Open Font License (OFL) are to stimulate worldwide
+         development of collaborative font projects, to support the font creation
+         efforts of academic and linguistic communities, and to provide a free and
+         open framework in which fonts may be shared and improved in partnership
+         with others.
+
+         The OFL allows the licensed fonts to be used, studied, modified and
+         redistributed freely as long as they are not sold by themselves. The
+         fonts, including any derivative works, can be bundled, embedded, 
+         redistributed and/or sold with any software provided that any reserved
+         names are not used by derivative works. The fonts and derivatives,
+         however, cannot be released under any other type of license. The
+         requirement for fonts to remain under this license does not apply
+         to any document created using the fonts or their derivatives.
+
+         DEFINITIONS
+         "Font Software" refers to the set of files released by the Copyright
+         Holder(s) under this license and clearly marked as such. This may
+         include source files, build scripts and documentation.
+
+         "Reserved Font Name" refers to any names specified as such after the
+         copyright statement(s).
+
+         "Original Version" refers to the collection of Font Software components as
+         distributed by the Copyright Holder(s).
+
+         "Modified Version" refers to any derivative made by adding to, deleting,
+         or substituting -- in part or in whole -- any of the components of the
+         Original Version, by changing formats or by porting the Font Software to a
+         new environment.
+
+         "Author" refers to any designer, engineer, programmer, technical
+         writer or other person who contributed to the Font Software.
+
+         PERMISSION & CONDITIONS
+         Permission is hereby granted, free of charge, to any person obtaining
+         a copy of the Font Software, to use, study, copy, merge, embed, modify,
+         redistribute, and sell modified and unmodified copies of the Font
+         Software, subject to the following conditions:
+
+         1) Neither the Font Software nor any of its individual components,
+         in Original or Modified Versions, may be sold by itself.
+
+         2) Original or Modified Versions of the Font Software may be bundled,
+         redistributed and/or sold with any software, provided that each copy
+         contains the above copyright notice and this license. These can be
+         included either as stand-alone text files, human-readable headers or
+         in the appropriate machine-readable metadata fields within text or
+         binary files as long as those fields can be easily viewed by the user.
+
+         3) No Modified Version of the Font Software may use the Reserved Font
+         Name(s) unless explicit written permission is granted by the corresponding
+         Copyright Holder. This restriction only applies to the primary font name as
+         presented to the users.
+
+         4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+         Software shall not be used to promote, endorse or advertise any
+         Modified Version, except to acknowledge the contribution(s) of the
+         Copyright Holder(s) and the Author(s) or with their explicit written
+         permission.
+
+         5) The Font Software, modified or unmodified, in part or in whole,
+         must be distributed entirely under this license, and must not be
+         distributed under any other license. The requirement for fonts to
+         remain under this license does not apply to any document created
+         using the Font Software.
+
+         TERMINATION
+         This license becomes null and void if any of the above conditions are
+         not met.
+
+         DISCLAIMER
+         THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+         EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+         MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+         OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+         COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+         INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+         DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+         FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+         OTHER DEALINGS IN THE FONT SOFTWARE.
+      */
+
       /* ── Spinner ── */
       .spinner {
         width: 16px;
@@ -944,15 +1185,56 @@
                  round trip as Slack. The account that signs in is the one
                  whose spaces are listed in step 4. -->
             <div id="gchat-connect" style="display: none">
+              <!-- Google's "Sign in with Google" button, as its configurator
+                   generates it (see the "Sign in with Google" styles). Once
+                   signed in, the account shows in the status button below
+                   instead, so Google's button never carries other text. -->
               <button
-                class="btn btn-secondary"
+                class="gsi-material-button"
                 id="btn-connect-gchat"
                 onclick="connectGoogle()"
+                style="width: 100%"
                 disabled
               >
-                <span class="gchat-logo" aria-hidden="true"></span>
-                Connect Google Chat
+                <div class="gsi-material-button-state"></div>
+                <div class="gsi-material-button-content-wrapper">
+                  <div class="gsi-material-button-icon">
+                    <svg
+                      version="1.1"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 48 48"
+                      xmlns:xlink="http://www.w3.org/1999/xlink"
+                      style="display: block"
+                    >
+                      <path
+                        fill="#EA4335"
+                        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+                      ></path>
+                      <path
+                        fill="#4285F4"
+                        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+                      ></path>
+                      <path
+                        fill="#FBBC05"
+                        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+                      ></path>
+                      <path
+                        fill="#34A853"
+                        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+                      ></path>
+                      <path fill="none" d="M0 0h48v48H0z"></path>
+                    </svg>
+                  </div>
+                  <span class="gsi-material-button-contents">Sign in with Google</span>
+                  <span style="display: none">Sign in with Google</span>
+                </div>
               </button>
+              <button
+                class="btn btn-secondary"
+                id="gchat-connected"
+                style="display: none"
+                disabled
+              ></button>
               <!-- Google shows each Chat permission with its own checkbox and
                    has no way to pre-select them (granular consent), so say
                    what to select before the user gets there. -->
@@ -1157,6 +1439,47 @@
             id="dash-reconnect-btn"
             style="display: none; margin-top: 8px"
           ></button>
+          <!-- Reconnecting Google Chat is a Google sign-in, so it gets
+               Google's button too (shown for google_revoked only). -->
+          <button
+            class="gsi-material-button"
+            id="dash-google-signin"
+            onclick="reconnectGoogle()"
+            style="display: none; margin-top: 8px"
+          >
+            <div class="gsi-material-button-state"></div>
+            <div class="gsi-material-button-content-wrapper">
+              <div class="gsi-material-button-icon">
+                <svg
+                  version="1.1"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 48 48"
+                  xmlns:xlink="http://www.w3.org/1999/xlink"
+                  style="display: block"
+                >
+                  <path
+                    fill="#EA4335"
+                    d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+                  ></path>
+                  <path
+                    fill="#4285F4"
+                    d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+                  ></path>
+                  <path
+                    fill="#FBBC05"
+                    d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+                  ></path>
+                  <path
+                    fill="#34A853"
+                    d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+                  ></path>
+                  <path fill="none" d="M0 0h48v48H0z"></path>
+                </svg>
+              </div>
+              <span class="gsi-material-button-contents">Sign in with Google</span>
+              <span style="display: none">Sign in with Google</span>
+            </div>
+          </button>
         </div>
 
         <div class="card">
@@ -1811,12 +2134,18 @@
         } else {
           slackBtn.disabled = !app.figmaConnected;
         }
+        // Google's sign-in button keeps its own label; once signed in, a
+        // status button names the account instead.
         const gchatBtn = document.getElementById("btn-connect-gchat");
+        const gchatConnectedEl = document.getElementById("gchat-connected");
         if (app.gchatConnected) {
-          gchatBtn.textContent = `Connected as ${app.gchatEmail || "your Google account"}`;
-          gchatBtn.disabled = true;
+          gchatConnectedEl.textContent = `Connected as ${app.gchatEmail || "your Google account"}`;
+          gchatConnectedEl.style.display = "";
+          gchatBtn.style.display = "none";
           document.getElementById("gchat-connect-hint").style.display = "none";
         } else {
+          gchatConnectedEl.style.display = "none";
+          gchatBtn.style.display = "";
           gchatBtn.disabled = !app.figmaConnected;
           document.getElementById("gchat-connect-hint").style.display = "block";
         }
@@ -2121,16 +2450,6 @@
       // sign-in and consent; we poll until the callback completes the session.
       let googlePollTimer = null;
 
-      // Back to "Connect Google Chat", logo included, after a sign-in that
-      // failed, timed out or never started.
-      function resetGoogleButton(btn) {
-        const logo = document.createElement("span");
-        logo.className = "gchat-logo";
-        logo.setAttribute("aria-hidden", "true");
-        btn.replaceChildren(logo, "Connect Google Chat");
-        btn.disabled = false;
-      }
-
       async function connectGoogle(onDone) {
         const btn = document.getElementById("btn-connect-gchat");
         if (!app.sessionToken) {
@@ -2138,8 +2457,10 @@
           return;
         }
         const state = makeStateNonce();
+        // Google's button keeps its "G" and label (its branding guidelines),
+        // so it only disables; the status line says what's happening.
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span> Connecting…';
+        setStatus("gchat-status", "Opening Google sign-in…", false);
 
         try {
           const res = await api(`/api/gchat/start`, {
@@ -2177,11 +2498,11 @@
               } else if (statusData.status === "failed") {
                 clearInterval(googlePollTimer);
                 googlePollTimer = null;
-                resetGoogleButton(btn);
+                btn.disabled = false;
                 setStatus(
                   "gchat-status",
                   statusData.data?.error === "scopes_declined"
-                    ? "Library Pulse needs both Google Chat permissions. Connect again and select all the permissions Google lists."
+                    ? "Library Pulse needs both Google Chat permissions. Sign in with Google again and select all the permissions Google lists."
                     : "Sign-in failed. Try again.",
                   true,
                 );
@@ -2195,12 +2516,12 @@
             if (googlePollTimer) {
               clearInterval(googlePollTimer);
               googlePollTimer = null;
-              resetGoogleButton(btn);
+              btn.disabled = false;
               setStatus("gchat-status", "Timed out. Please try again.", true);
             }
           }, 180000);
         } catch (e) {
-          resetGoogleButton(btn);
+          btn.disabled = false;
           setStatus(
             "gchat-status",
             e && e.message ? e.message : "Connection error. Check your network.",
@@ -3235,7 +3556,7 @@
         const revoked = (m.errors || []).includes("google_revoked");
         return {
           text: revoked
-            ? "Saved, but your Google sign-in has expired. Reconnect Google Chat, then save again."
+            ? "Saved, but your Google sign-in has expired. Sign in with Google, then save again."
             : `Saved, but Library Pulse couldn't be added to ${plural(m.failed, "space", "spaces")}. In Google Chat, open the space, choose Apps & integrations, and add Library Pulse.`,
           isError: true,
         };
@@ -3375,6 +3696,7 @@
         const title = document.getElementById("dash-reconnect-title");
         const desc = document.getElementById("dash-reconnect-desc");
         const btn = document.getElementById("dash-reconnect-btn");
+        const googleBtn = document.getElementById("dash-google-signin");
         const status = config.delivery_status || "ok";
         const isEmail = config.destination === "email";
         const isGchat = config.destination === "gchat";
@@ -3384,6 +3706,7 @@
         banner.classList.remove("banner-warning");
         btn.style.display = "none";
         btn.onclick = null;
+        googleBtn.style.display = "none";
 
         if (status === "send_failing" && (isEmail || isGchat)) {
           badge.textContent = "Deliveries failing";
@@ -3415,7 +3738,7 @@
                 : status === "google_revoked"
                   ? {
                       label: "Google Chat disconnected",
-                      desc: "The Google sign-in behind this file expired or was revoked. Reconnect Google Chat to resume updates.",
+                      desc: "The Google sign-in behind this file expired or was revoked. Sign in with Google again to resume updates.",
                       tone: "danger",
                     }
                   : {
@@ -3440,9 +3763,8 @@
             btn.onclick = reconnectFigma;
             btn.style.display = "inline-flex";
           } else if (status === "google_revoked") {
-            btn.textContent = "Reconnect Google Chat";
-            btn.onclick = reconnectGoogle;
-            btn.style.display = "inline-flex";
+            // A Google sign-in, so Google's own button (wired in the markup).
+            googleBtn.style.display = "inline-block";
           }
           // send_failing → informational banner only.
         } else if (config.is_active === false) {
@@ -3532,9 +3854,9 @@
           case "slack_reauth_required":
             return "Slack needs reconnecting to enable this (new permissions were added).";
           case "google_reauth_required":
-            return "Your Google sign-in has expired. Use Connect Google Chat again.";
+            return "Your Google sign-in has expired. Sign in with Google again.";
           case "google_not_connected":
-            return "Connect Google Chat first.";
+            return "Sign in with Google first.";
           case "google_installation_forbidden":
             return "That Google account was connected by someone else. Sign in with your own.";
           case "config_exists":

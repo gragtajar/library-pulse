@@ -227,7 +227,7 @@ Apply `database/migrations/007-google-chat.sql` and `database/migrations/008-goo
 The plugin walks you through four numbered steps:
 
 1. **Connect Figma** — automatic on open. A browser tab opens once so you can authorize the app (scopes: `webhooks:write`, `webhooks:read`, `library_assets:read`); no need to sign in again.
-2. **Choose where to get updates** — a list of **Slack** (up to 3 channels), **Google Chat** (up to 3 spaces) and **Email** (up to 5 addresses), one per file (you can switch later). Choosing Slack shows **Connect to Slack**, an OAuth flow in your browser. Choosing Google Chat shows **Connect Google Chat**, a Google sign-in in your browser; Google lists the two Chat permissions with a checkbox each, and both must be selected (the plugin says so before you sign in). Email has nothing to connect.
+2. **Choose where to get updates** — a list of **Slack** (up to 3 channels), **Google Chat** (up to 3 spaces) and **Email** (up to 5 addresses), one per file (you can switch later). Choosing Slack shows **Connect to Slack**, an OAuth flow in your browser. Choosing Google Chat shows Google's own **Sign in with Google** button (built to Google's branding guidelines), which opens the Google sign-in in your browser; Google lists the two Chat permissions with a checkbox each, and both must be selected (the plugin says so before you sign in). Email has nothing to connect.
 3. **Select file** — the file you have open is **identified automatically**: Figma doesn't expose file ids to Community plugins, so the plugin resolves one of the file's own published component/style keys to its file id via the backend. (A library that has never been published shows "publish it once, then Refresh".) There's no way to target a different file.
 4. **Add channels, spaces or addresses** — depending on step 2:
    - **Slack:** pick 1–3 channels from a **searchable dropdown** (sorted by member count; `#` public, 🔒 private). Optionally add a **custom message** posted with every notification — type `@` to mention people or user groups from a searchable picker (they're pinged in Slack).
@@ -390,7 +390,7 @@ The SES credentials use their own names on purpose. Vercel's function runtime ca
 
 11. **Vercel Hobby allows 12 functions per deployment**, and `backend/api/` has 8. Related endpoints share a function (`lib/dispatch.js`); a test guards the count.
 
-12. **Google Chat before verification.** The two Chat scopes the sign-in asks for are classed sensitive by Google. Until Google verifies them, an app in production shows an "unverified app" warning and stops at 100 users for the project's lifetime; an app in Testing is limited to listed test users, whose grants expire after 7 days (the plugin then shows "Reconnect Google Chat").
+12. **Google Chat before verification.** The two Chat scopes the sign-in asks for are classed sensitive by Google. Until Google verifies them, an app in production shows an "unverified app" warning and stops at 100 users for the project's lifetime; an app in Testing is limited to listed test users, whose grants expire after 7 days (the plugin then asks them to sign in with Google again).
 
 13. **Google Chat shows one time zone per file**, like email: the zone of whoever last saved the spaces.
 
