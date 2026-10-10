@@ -27,10 +27,19 @@ if (allowed.has("*")) {
   );
 }
 
+// Comments can't make requests, so URLs in them (e.g. the attribution links
+// in the embedded font's license) aren't origins the UI talks to. Only HTML
+// comments and CSS comments inside <style> are dropped: in CSS "/*" always
+// opens a comment, while in the scripts it can sit in a string or a line
+// comment, so the scripts are scanned whole.
+const scanned = ui
+  .replace(/<!--[\s\S]*?-->/g, "")
+  .replace(/<style\b[^>]*>[\s\S]*?<\/style>/g, (css) => css.replace(/\/\*[\s\S]*?\*\//g, ""));
+
 // Collect every absolute URL the UI references.
 const urlRe = /https?:\/\/[^\s"'<>`)]+/g;
 const found = new Set();
-for (const match of ui.matchAll(urlRe)) {
+for (const match of scanned.matchAll(urlRe)) {
   try {
     const u = new URL(match[0]);
     found.add(`${u.protocol}//${u.host}`);
