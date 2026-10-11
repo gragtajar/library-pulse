@@ -578,6 +578,18 @@
         font-size: 11px;
         color: var(--figma-color-text-secondary, #666);
       }
+      /* Slack's official mark: SLA-Slack-icon-RGB.svg, byte for byte, from
+         Slack's media kit (slack.com/media-kit, "Logos": Salesforce's DAM
+         collection yn6bxnam). An image, so its shapes and colours can't be
+         restyled, as Slack's brand terms require. */
+      .slack-mark {
+        display: inline-block;
+        flex-shrink: 0;
+        width: 16px;
+        height: 16px;
+        background: url("data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iTGF5ZXJfMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCA0MDAgNDAwIj4KICA8IS0tIEdlbmVyYXRvcjogQWRvYmUgSWxsdXN0cmF0b3IgMzAuNC4wLCBTVkcgRXhwb3J0IFBsdWctSW4gLiBTVkcgVmVyc2lvbjogMi4xLjQgQnVpbGQgMjI2KSAgLS0+CiAgPGRlZnM+CiAgICA8c3R5bGU+CiAgICAgIC5zdDAgewogICAgICAgIGZpbGw6ICM0MWI2NTg7CiAgICAgIH0KCiAgICAgIC5zdDEgewogICAgICAgIGZpbGw6ICMwMGIzZmY7CiAgICAgIH0KCiAgICAgIC5zdDIgewogICAgICAgIGZpbGw6ICNlMzA2NmE7CiAgICAgIH0KCiAgICAgIC5zdDMgewogICAgICAgIGZpbGw6ICNmY2MwMDM7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxnPgogICAgPHBhdGggY2xhc3M9InN0MiIgZD0iTTg0LjAzOSwyNTIuNzY5YzAsMjMuMTI3LTE4Ljg5Myw0Mi4wMi00Mi4wMiw0Mi4wMlMwLDI3NS44OTYsMCwyNTIuNzY5czE4Ljg5My00Mi4wMiw0Mi4wMi00Mi4wMmg0Mi4wMnY0Mi4wMloiLz4KICAgIDxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0xMDUuMjEyLDI1Mi43NjljMC0yMy4xMjcsMTguODkzLTQyLjAyLDQyLjAyLTQyLjAyczQyLjAyLDE4Ljg5Myw0Mi4wMiw0Mi4wMnYxMDUuMjEyYzAsMjMuMTI3LTE4Ljg5Myw0Mi4wMi00Mi4wMiw0Mi4wMnMtNDIuMDItMTguODkzLTQyLjAyLTQyLjAyYzAsMCwwLTEwNS4yMTIsMC0xMDUuMjEyWiIvPgogIDwvZz4KICA8Zz4KICAgIDxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xNDcuMjMxLDg0LjAzOWMtMjMuMTI3LDAtNDIuMDItMTguODkzLTQyLjAyLTQyLjAyUzEyNC4xMDQsMCwxNDcuMjMxLDBzNDIuMDIsMTguODkzLDQyLjAyLDQyLjAydjQyLjAyaC00Mi4wMloiLz4KICAgIDxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xNDcuMjMxLDEwNS4yMTJjMjMuMTI3LDAsNDIuMDIsMTguODkzLDQyLjAyLDQyLjAycy0xOC44OTMsNDIuMDItNDIuMDIsNDIuMDJINDIuMDJjLTIzLjEyNywwLTQyLjAyLTE4Ljg5My00Mi4wMi00Mi4wMnMxOC44OTMtNDIuMDIsNDIuMDItNDIuMDJjMCwwLDEwNS4yMTIsMCwxMDUuMjEyLDBaIi8+CiAgPC9nPgogIDxnPgogICAgPHBhdGggY2xhc3M9InN0MCIgZD0iTTMxNS45NjEsMTQ3LjIzMWMwLTIzLjEyNywxOC44OTMtNDIuMDIsNDIuMDItNDIuMDJzNDIuMDIsMTguODkzLDQyLjAyLDQyLjAyLTE4Ljg5Myw0Mi4wMi00Mi4wMiw0Mi4wMmgtNDIuMDJ2LTQyLjAyWiIvPgogICAgPHBhdGggY2xhc3M9InN0MCIgZD0iTTI5NC43ODgsMTQ3LjIzMWMwLDIzLjEyNy0xOC44OTMsNDIuMDItNDIuMDIsNDIuMDJzLTQyLjAyLTE4Ljg5My00Mi4wMi00Mi4wMlY0Mi4wMmMwLTIzLjEyNywxOC44OTMtNDIuMDIsNDIuMDItNDIuMDJzNDIuMDIsMTguODkzLDQyLjAyLDQyLjAydjEwNS4yMTJaIi8+CiAgPC9nPgogIDxnPgogICAgPHBhdGggY2xhc3M9InN0MyIgZD0iTTI1Mi43NjksMzE1Ljk2MWMyMy4xMjcsMCw0Mi4wMiwxOC44OTMsNDIuMDIsNDIuMDJzLTE4Ljg5Myw0Mi4wMi00Mi4wMiw0Mi4wMi00Mi4wMi0xOC44OTMtNDIuMDItNDIuMDJ2LTQyLjAyaDQyLjAyWiIvPgogICAgPHBhdGggY2xhc3M9InN0MyIgZD0iTTI1Mi43NjksMjk0Ljc4OGMtMjMuMTI3LDAtNDIuMDItMTguODkzLTQyLjAyLTQyLjAyczE4Ljg5My00Mi4wMiw0Mi4wMi00Mi4wMmgxMDUuMjEyYzIzLjEyNywwLDQyLjAyLDE4Ljg5Myw0Mi4wMiw0Mi4wMnMtMTguODkzLDQyLjAyLTQyLjAyLDQyLjAyaC0xMDUuMjEyWiIvPgogIDwvZz4KPC9zdmc+")
+          center / contain no-repeat;
+      }
       /* Google Chat's official logo, the file Google's own Chat page uses
          (gstatic.com/images/branding/productlogos/chat_2026/v2/web/192px.svg).
          Embedded as an image: Figma's plugin CSP allows data: URIs, and the
@@ -1105,24 +1117,7 @@
                 disabled
               >
                 <span class="dest-icon" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path
-                      d="M3.36 10.04a1.68 1.68 0 1 1-1.68-1.68h1.68v1.68zm.84 0a1.68 1.68 0 1 1 3.36 0v4.28a1.68 1.68 0 1 1-3.36 0v-4.28z"
-                      fill="#E01E5A"
-                    />
-                    <path
-                      d="M5.96 3.36a1.68 1.68 0 1 1 1.68-1.68v1.68H5.96zm0 .84a1.68 1.68 0 0 1 0 3.36H1.68a1.68 1.68 0 0 1 0-3.36h4.28z"
-                      fill="#36C5F0"
-                    />
-                    <path
-                      d="M12.64 5.96a1.68 1.68 0 1 1 1.68 1.68h-1.68V5.96zm-.84 0a1.68 1.68 0 0 1-3.36 0V1.68a1.68 1.68 0 0 1 3.36 0v4.28z"
-                      fill="#2EB67D"
-                    />
-                    <path
-                      d="M10.04 12.64a1.68 1.68 0 1 1-1.68 1.68v-1.68h1.68zm0-.84a1.68 1.68 0 0 1 0-3.36h4.28a1.68 1.68 0 0 1 0 3.36h-4.28z"
-                      fill="#ECB22E"
-                    />
-                  </svg>
+                  <span class="slack-mark"></span>
                 </span>
                 <span class="dest-name">Slack</span>
                 <span class="dest-meta">Up to 3 channels</span>
