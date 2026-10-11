@@ -2558,7 +2558,12 @@
         try {
           const res = await api(`/api/gchat/spaces?${q.qs}`);
           const data = await readJson(res);
-          if (!res.ok) throw new Error(friendlyError(data.error) || "Couldn't load spaces");
+          if (!res.ok) {
+            if (data.error === "google_reauth_required" && isOwnGoogleSignIn(q)) {
+              forgetGoogleSignIn();
+            }
+            throw new Error(friendlyError(data.error) || "Couldn't load spaces");
+          }
           app.allSpaces = Array.isArray(data.spaces) ? data.spaces : [];
           app.spacesTruncated = data.truncated === true;
           app.spacesLoaded = true;
@@ -2573,6 +2578,33 @@
           app.spacesLoading = false;
           renderSpaceDropdown();
         }
+      }
+
+      // Whether a failed space list used the Google sign-in saved here: the
+      // account signed in with in setup, or the file's account when it is the
+      // same one. (A file set up with someone else's account recovers from
+      // the dashboard's "Google Chat disconnected" banner instead.)
+      function isOwnGoogleSignIn(q) {
+        return (
+          !!app.gchatInstallationId &&
+          (q.key === `i:${app.gchatInstallationId}` ||
+            app.currentConfig?.google_installation_id === app.gchatInstallationId)
+        );
+      }
+
+      // The saved Google sign-in expired or was revoked. Kept, it would show
+      // "Connected as …" with Google's button hidden and leave no way to sign
+      // in again; forget it so the button comes back, with the reason below it.
+      function forgetGoogleSignIn() {
+        app.gchatConnected = false;
+        app.gchatInstallationId = null;
+        app.gchatEmail = null;
+        app.spacesLoaded = false;
+        app.spacesForKey = null;
+        setStorage("google_auth", null);
+        closeSpaceDropdown();
+        updateSetupState();
+        setStatus("gchat-status", friendlyError("google_reauth_required"), true);
       }
 
       function openSpaceDropdown() {
