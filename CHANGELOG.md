@@ -30,6 +30,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **The Slack row in step 2 shows Slack's official mark**, replacing a
+  hand-drawn approximation. It's `SLA-Slack-icon-RGB.svg` from Slack's media
+  kit ("Logos"), byte for byte, embedded as an image so it can't be restyled.
+  It carries Slack's current colours (#E3066A, #00B3FF, #41B658, #FCC003),
+  which Slack's own developer site also uses. Slack's "Add to Slack" button
+  image, below it, still has the previous palette; that is Slack's published
+  asset and isn't modified.
 - **Slack's official "Add to Slack" button.** Connecting Slack installs the
   Library Pulse app through Slack's OAuth install flow, and Slack's button for
   that flow is "Add to Slack". ("Sign in with Slack" is Slack's separate OpenID
