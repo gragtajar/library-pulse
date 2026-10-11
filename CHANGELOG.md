@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **No way to sign in to Google again after the sign-in expired.** The plugin
+  restored "Connected as …" from its saved sign-in, which hides the Sign in with
+  Google button. When Google had expired or revoked that sign-in (Testing-mode
+  grants last 7 days), the space picker said to sign in again, but there was no
+  button to do it. Now, when the space list fails with `google_reauth_required`
+  for the sign-in saved in the plugin (in first-time setup, or the file's own
+  account when it's the same one), the plugin forgets that sign-in. The button
+  comes back with "Your Google sign-in has expired. Sign in with Google again."
+  under it. A file set up with someone else's account keeps your sign-in; it
+  recovers from the dashboard's "Google Chat disconnected" banner.
 - **"Upstream service error" when saving email or Google Chat.** Production had
   run an early copy of migration 007 that lacked `configurations.gchat_timezone`
   and `gchat_spaces.muted`, and every save from the current plugin named the
