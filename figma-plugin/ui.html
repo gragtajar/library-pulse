@@ -68,7 +68,7 @@
          One visible focus treatment for everything the input rule doesn't
          already cover. Outline (not box-shadow) so it survives any button
          fill, with an offset gap so blue-on-blue stays visible. */
-      :is(textarea, .btn, .channel-pill .remove, .dest-option):focus-visible {
+      :is(textarea, .btn, .channel-pill .remove, .dest-option, .slack-add-button):focus-visible {
         outline: 2px solid var(--figma-color-bg-brand, #0d99ff);
         outline-offset: 1px;
       }
@@ -832,6 +832,29 @@
          OTHER DEALINGS IN THE FONT SOFTWARE.
       */
 
+      /* ── Add to Slack ──
+         Slack's official "Add to Slack" button (see ADD_TO_SLACK_1X): its
+         own image at its own 139 × 40, never restyled. Slack's brand terms
+         forbid changing the logo's colors, proportions or transparency, so the
+         button adds no fill, border or fade; disabled only stops the pointer,
+         and the focus ring sits outside the image. */
+      .slack-add-button {
+        display: inline-flex;
+        padding: 0;
+        border: none;
+        border-radius: 4px;
+        background: transparent;
+        cursor: pointer;
+      }
+      .slack-add-button:disabled {
+        cursor: default;
+      }
+      .slack-add-button img {
+        display: block;
+        width: 139px;
+        height: 40px;
+      }
+
       /* ── Spinner ── */
       .spinner {
         width: 16px;
@@ -1150,34 +1173,24 @@
             </div>
 
             <div id="slack-connect" style="display: none">
+              <!-- Slack's official "Add to Slack" button: this installs the
+                   Library Pulse app, Slack's OAuth install flow. (Slack's "Sign
+                   in with Slack" button is for its separate OpenID sign-in.)
+                   The image is added at startup (addToSlackImage). Once
+                   connected, the workspace shows in the status button below
+                   instead, so Slack's button never carries other text. -->
               <button
-                class="btn btn-secondary"
+                class="slack-add-button"
                 id="btn-connect-slack"
                 onclick="connectSlack()"
                 disabled
-              >
-                <!-- Official Slack mark: same limb geometry as before, now with
-                   the brand's four fills instead of a mono recolor. -->
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path
-                    d="M3.36 10.04a1.68 1.68 0 1 1-1.68-1.68h1.68v1.68zm.84 0a1.68 1.68 0 1 1 3.36 0v4.28a1.68 1.68 0 1 1-3.36 0v-4.28z"
-                    fill="#E01E5A"
-                  />
-                  <path
-                    d="M5.96 3.36a1.68 1.68 0 1 1 1.68-1.68v1.68H5.96zm0 .84a1.68 1.68 0 0 1 0 3.36H1.68a1.68 1.68 0 0 1 0-3.36h4.28z"
-                    fill="#36C5F0"
-                  />
-                  <path
-                    d="M12.64 5.96a1.68 1.68 0 1 1 1.68 1.68h-1.68V5.96zm-.84 0a1.68 1.68 0 0 1-3.36 0V1.68a1.68 1.68 0 0 1 3.36 0v4.28z"
-                    fill="#2EB67D"
-                  />
-                  <path
-                    d="M10.04 12.64a1.68 1.68 0 1 1-1.68 1.68v-1.68h1.68zm0-.84a1.68 1.68 0 0 1 0-3.36h4.28a1.68 1.68 0 0 1 0 3.36h-4.28z"
-                    fill="#ECB22E"
-                  />
-                </svg>
-                Connect to Slack
-              </button>
+              ></button>
+              <button
+                class="btn btn-secondary"
+                id="slack-connected"
+                style="display: none"
+                disabled
+              ></button>
               <div id="slack-status" style="margin-top: 8px"></div>
             </div>
 
@@ -1405,14 +1418,14 @@
                   Highlighted @names will be notified — pick them from the list after typing @. Any
                   editor of this file can change this note.
                 </div>
+                <!-- Re-running Slack's install grants the new permissions, so
+                     it gets Slack's "Add to Slack" button too. -->
                 <button
-                  class="btn btn-secondary btn-sm"
+                  class="slack-add-button"
                   id="btn-mention-reconnect"
                   onclick="reconnectSlackForMentions()"
                   style="display: none; margin-top: 6px"
-                >
-                  Reconnect Slack
-                </button>
+                ></button>
               </div>
             </div>
           </div>
@@ -1437,6 +1450,14 @@
           <button
             class="btn btn-secondary btn-sm"
             id="dash-reconnect-btn"
+            style="display: none; margin-top: 8px"
+          ></button>
+          <!-- Reconnecting Slack re-runs its install, so it gets Slack's
+               "Add to Slack" button (shown for slack_revoked only). -->
+          <button
+            class="slack-add-button"
+            id="dash-slack-add"
+            onclick="reconnectSlack()"
             style="display: none; margin-top: 8px"
           ></button>
           <!-- Reconnecting Google Chat is a Google sign-in, so it gets
@@ -1614,6 +1635,27 @@
         '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="5.2" width="8" height="5.3" rx="1"/><path d="M4 5V3.8a2 2 0 0 1 4 0V5"/></svg>';
       const ICON_USERS =
         '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="4.2" cy="4" r="1.8"/><path d="M1.5 10c.3-2 1.5-3 2.7-3s2.4 1 2.7 3"/><circle cx="8.6" cy="4.4" r="1.5"/><path d="M8.2 7.2c1.1.1 2 1 2.3 2.8"/></svg>';
+
+      // Slack's official "Add to Slack" button, byte for byte: the images
+      // Slack serves at platform.slack-edge.com/img/add_to_slack.png and
+      // add_to_slack@2x.png, which Slack's own SDKs (@slack/oauth, Bolt for
+      // Python) show on their install pages as <img alt="Add to Slack"
+      // width="139" height="40"> with a 1x/2x srcset. Embedded because the
+      // plugin can't load images from other domains.
+      const ADD_TO_SLACK_1X =
+        "data:image/png;base64,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";
+      const ADD_TO_SLACK_2X =
+        "data:image/png;base64,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";
+
+      function addToSlackImage() {
+        const img = document.createElement("img");
+        img.alt = "Add to Slack";
+        img.width = 139;
+        img.height = 40;
+        img.src = ADD_TO_SLACK_1X;
+        img.srcset = `${ADD_TO_SLACK_1X} 1x, ${ADD_TO_SLACK_2X} 2x`;
+        return img;
+      }
 
       // Convenience wrapper. Config calls carry a signed bearer session token (minted
       // after Figma OAuth); the backend derives the user identity from it, so a
@@ -2128,10 +2170,16 @@
           destNum.className = app.figmaConnected ? "step-num active" : "step-num pending";
           destNum.textContent = "2";
         }
+        // Slack's "Add to Slack" image is never relabelled; once connected, a
+        // status button names the workspace instead.
+        const slackConnectedEl = document.getElementById("slack-connected");
         if (app.slackConnected) {
-          slackBtn.textContent = `Connected to ${app.slackTeamName || "Slack"}`;
-          slackBtn.disabled = true;
+          slackConnectedEl.textContent = `Connected to ${app.slackTeamName || "Slack"}`;
+          slackConnectedEl.style.display = "";
+          slackBtn.style.display = "none";
         } else {
+          slackConnectedEl.style.display = "none";
+          slackBtn.style.display = "";
           slackBtn.disabled = !app.figmaConnected;
         }
         // Google's sign-in button keeps its own label; once signed in, a
@@ -2377,8 +2425,10 @@
           return;
         }
         const state = makeStateNonce();
+        // Slack's button image stays as Slack made it (its brand terms), so
+        // the button only disables; the status line says what's happening.
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span> Connecting…';
+        setStatus("slack-status", "Opening Slack…", false);
 
         try {
           const res = await api(`/api/auth/slack`, {
@@ -2416,7 +2466,6 @@
               } else if (statusData.status === "failed") {
                 clearInterval(pollTimer);
                 btn.disabled = false;
-                btn.textContent = "Connect to Slack";
                 setStatus("slack-status", "Authorization failed. Try again.", true);
               }
             } catch (e) {
@@ -2429,13 +2478,11 @@
             if (pollTimer) {
               clearInterval(pollTimer);
               btn.disabled = false;
-              btn.textContent = "Connect to Slack";
               setStatus("slack-status", "Timed out. Please try again.", true);
             }
           }, 180000);
         } catch (e) {
           btn.disabled = false;
-          btn.textContent = "Connect to Slack";
           setStatus(
             "slack-status",
             e && e.message ? e.message : "Connection error. Check your network.",
@@ -3082,7 +3129,7 @@
         }
         if (app.mentionDirError === "slack_reauth_required") {
           hint.textContent =
-            "@mentions need Slack's updated permissions. Reconnect Slack to enable them — the note itself still works.";
+            "@mentions need Slack's updated permissions. Add Library Pulse to Slack again to enable them — the note itself still works.";
           hint.style.color = "var(--lp-amber)";
           if (reconnectBtn) reconnectBtn.style.display = "inline-flex";
         } else if (app.mentionDirTruncated) {
@@ -3370,6 +3417,10 @@
       // Wire the destination picker, the address box, the channel search box
       // and the mention composer.
       document.addEventListener("DOMContentLoaded", () => {
+        for (const btn of document.querySelectorAll(".slack-add-button")) {
+          btn.replaceChildren(addToSlackImage());
+        }
+
         const destList = document.getElementById("dest-list");
         if (destList) {
           destList.addEventListener("click", (e) => {
@@ -3729,6 +3780,7 @@
         const desc = document.getElementById("dash-reconnect-desc");
         const btn = document.getElementById("dash-reconnect-btn");
         const googleBtn = document.getElementById("dash-google-signin");
+        const slackAddBtn = document.getElementById("dash-slack-add");
         const status = config.delivery_status || "ok";
         const isEmail = config.destination === "email";
         const isGchat = config.destination === "gchat";
@@ -3739,6 +3791,7 @@
         btn.style.display = "none";
         btn.onclick = null;
         googleBtn.style.display = "none";
+        slackAddBtn.style.display = "none";
 
         if (status === "send_failing" && (isEmail || isGchat)) {
           badge.textContent = "Deliveries failing";
@@ -3756,7 +3809,7 @@
             status === "slack_revoked"
               ? {
                   label: "Slack disconnected",
-                  desc: "Reconnect Slack to resume notifications.",
+                  desc: "Add Library Pulse to Slack again to resume notifications.",
                   tone: "danger",
                 }
               : status === "figma_revoked"
@@ -3787,9 +3840,8 @@
 
           // Provide the relevant reconnect action (§6c).
           if (status === "slack_revoked") {
-            btn.textContent = "Reconnect Slack";
-            btn.onclick = reconnectSlack;
-            btn.style.display = "inline-flex";
+            // Re-running Slack's install: Slack's own button (wired in the markup).
+            slackAddBtn.style.display = "inline-flex";
           } else if (status === "figma_revoked" && app.isOwner) {
             btn.textContent = "Reconnect Figma";
             btn.onclick = reconnectFigma;
@@ -3884,7 +3936,7 @@
           case "figma_not_connected":
             return "Connect Figma first.";
           case "slack_reauth_required":
-            return "Slack needs reconnecting to enable this (new permissions were added).";
+            return "Add Library Pulse to Slack again to enable this (new permissions were added).";
           case "google_reauth_required":
             return "Your Google sign-in has expired. Sign in with Google again.";
           case "google_not_connected":
