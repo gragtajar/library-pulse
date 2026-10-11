@@ -30,6 +30,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **Slack's official "Add to Slack" button.** Connecting Slack installs the
+  Library Pulse app through Slack's OAuth install flow, and Slack's button for
+  that flow is "Add to Slack". ("Sign in with Slack" is Slack's separate OpenID
+  sign-in, and Slack doesn't allow its scopes in the same flow.)
+  - The button is Slack's own image, byte for byte (`add_to_slack.png` and
+    `@2x`), shown as Slack's SDKs show it: 139 × 40 with a 1x/2x srcset. It
+    is embedded because a plugin can't load images from other domains.
+  - It replaces "Connect to Slack" in setup, "Reconnect Slack" in the
+    @mention hint, and "Reconnect Slack" on the dashboard's "Slack
+    disconnected" banner.
+  - Slack's brand terms forbid changing the logo's colors, proportions or
+    transparency, so the image is never relabelled or faded. While
+    connecting, the button only disables; once connected, a separate status
+    button shows "Connected to …".
 - **Step 2 lists the destinations as a stacked list: Slack, Google Chat, Email.**
   Each row shows its limit (up to 3 channels, 3 spaces, 5 addresses). The
   Microsoft Teams "Coming soon" card is gone until Teams is fully built. The
