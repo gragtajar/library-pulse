@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A Google Chat space the app couldn't be added to was never tried again.**
+  When Google refused to add Library Pulse to a chosen space (for example
+  because the signed-in account wasn't yet allowed to install the app), the
+  space was still saved, and later saves only added the app to _new_ spaces,
+  so fixing the cause on Google's side changed nothing until the space was
+  removed and chosen again. Every save of a Google Chat config now also
+  retries the chosen spaces that have no recorded membership (the add was
+  refused, or the app was removed from the space), and reports the result the
+  same way.
+- **Google Chat failures now say why.** The log line for a refused add or a
+  failed post carries Google's HTTP status, its `ErrorInfo.reason` (such as
+  `ACCESS_TOKEN_SCOPE_INSUFFICIENT`) and the start of its message; the line
+  for a failed app sign-in names the Workload Identity Federation pool
+  address and the service account it was built from, so an `invalid_target`
+  points at the setting to fix. Nothing logged is a token or an address.
+  The four `GCP_*` federation settings are also trimmed, so whitespace pasted
+  around a value can't corrupt the pool address.
 - **No way to sign in to Google again after the sign-in expired.** The plugin
   restored "Connected as …" from its saved sign-in, which hides the Sign in with
   Google button. When Google had expired or revoked that sign-in (Testing-mode

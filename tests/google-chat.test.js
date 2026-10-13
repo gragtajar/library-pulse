@@ -87,6 +87,41 @@ describe("addAppToSpace (user token)", () => {
     });
   });
 
+  it("carries Google's reason and message, so a refusal can be diagnosed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        reply(403, {
+          error: {
+            code: 403,
+            message: "Request had insufficient authentication scopes.",
+            status: "PERMISSION_DENIED",
+            details: [
+              {
+                "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                reason: "ACCESS_TOKEN_SCOPE_INSUFFICIENT",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    await expect(addAppToSpace("t", "spaces/AAA")).rejects.toMatchObject({
+      code: "permission_denied",
+      status: 403,
+      reason: "ACCESS_TOKEN_SCOPE_INSUFFICIENT",
+      detail: "Request had insufficient authentication scopes.",
+    });
+    // Without details or a message, neither field is invented.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => reply(403, { error: { status: "PERMISSION_DENIED" } })),
+    );
+    const bare = await addAppToSpace("t", "spaces/AAA").catch((e) => e);
+    expect(bare.reason).toBeUndefined();
+    expect(bare.detail).toBeUndefined();
+  });
+
   it("refuses a malformed space name before any request", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

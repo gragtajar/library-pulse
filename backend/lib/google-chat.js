@@ -26,14 +26,16 @@ export class ChatApiError extends Error {
   /**
    * @param {string} code
    * @param {number} status
-   * @param {string} [detail]
+   * @param {string} [detail]  Google's `error.message`
+   * @param {string} [reason]  Google's `ErrorInfo.reason`, e.g. ACCESS_TOKEN_SCOPE_INSUFFICIENT
    */
-  constructor(code, status, detail) {
+  constructor(code, status, detail, reason) {
     super(`chat_api_error:${code}`);
     this.name = "ChatApiError";
     this.code = code;
     this.status = status;
     this.detail = detail;
+    this.reason = reason;
   }
 }
 
@@ -135,7 +137,12 @@ async function chatRequest(token, method, url, body) {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new ChatApiError(errorCode(res.status, data), res.status, data?.error?.message);
+    throw new ChatApiError(
+      errorCode(res.status, data),
+      res.status,
+      typeof data?.error?.message === "string" ? data.error.message : undefined,
+      errorReason(data),
+    );
   }
   return data;
 }
@@ -152,6 +159,21 @@ function errorCode(status, data) {
   if (status === 409) return "already_exists";
   if (status === 429) return "rate_limited";
   return `http_${status}`;
+}
+
+/**
+ * The `reason` of the first `google.rpc.ErrorInfo` in the error's details,
+ * which says WHY a 403 happened (a missing scope, a disabled API, …) where
+ * `error.message` only says that it did.
+ *
+ * @param {any} data
+ * @returns {string | undefined}
+ */
+function errorReason(data) {
+  const details = data?.error?.details;
+  if (!Array.isArray(details)) return undefined;
+  const info = details.find((d) => typeof d?.reason === "string" && d.reason);
+  return info ? String(info.reason).slice(0, 80) : undefined;
 }
 
 /** @param {string} name */

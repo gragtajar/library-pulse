@@ -48,7 +48,11 @@ import {
 import { assertFileAccess, getFigmaAccessToken } from "../lib/figma-access.js";
 import { planCreate, planUpdate } from "../lib/config-destination.js";
 import { sendConfirmations } from "../lib/email-delivery.js";
-import { ensureAppMemberships } from "../lib/gchat-delivery.js";
+import {
+  ensureAppMemberships,
+  normalizeSpaceList,
+  spacesNeedingApp,
+} from "../lib/gchat-delivery.js";
 import { getInstallation } from "../lib/google-installations.js";
 
 const PG_UNIQUE_VIOLATION = "23505";
@@ -365,30 +369,39 @@ async function confirmNewRecipients(config, addedEmails) {
 }
 
 /**
- * Google Chat: add the app to the spaces this save introduced, with the
- * token of the Google account on the config. Never throws: the save already
- * happened; the result tells the plugin which spaces still need attention.
+ * Google Chat: add the app to the spaces this save introduced, and to any
+ * stored space it still isn't in (an earlier add was refused, say because
+ * the account wasn't allowed to install the app yet), with the token of the
+ * Google account on the config. Never throws: the save already happened; the
+ * result tells the plugin which spaces still need attention.
  *
  * @param {any} config  the saved row
  * @param {Array<{ name: string, display_name: string }>} addedSpaces
  * @returns {Promise<{ spaceMemberships?: { added: number, failed: number, errors: string[] } }>}
  */
 async function addAppToSpaces(config, addedSpaces) {
-  if (addedSpaces.length === 0) return {};
+  if (config?.destination !== "gchat") return {};
+  /** @type {import("../lib/gchat-delivery.js").ConfigSpace[]} */
+  let spaces = addedSpaces;
   try {
-    const inst = config?.google_installation_id
+    const stored = normalizeSpaceList(config.gchat_spaces).filter(
+      (s) => !addedSpaces.some((a) => a.name === s.name),
+    );
+    spaces = [...addedSpaces, ...(await spacesNeedingApp(stored))];
+    if (spaces.length === 0) return {};
+    const inst = config.google_installation_id
       ? await getInstallation(config.google_installation_id)
       : null;
     if (!inst) {
       return {
         spaceMemberships: {
           added: 0,
-          failed: addedSpaces.length,
-          errors: addedSpaces.map(() => "google_not_connected"),
+          failed: spaces.length,
+          errors: spaces.map(() => "google_not_connected"),
         },
       };
     }
-    return { spaceMemberships: await ensureAppMemberships(inst, addedSpaces) };
+    return { spaceMemberships: await ensureAppMemberships(inst, spaces) };
   } catch (err) {
     logger.warn("gchat_memberships_failed", {
       config_id: config?.id,
@@ -397,8 +410,8 @@ async function addAppToSpaces(config, addedSpaces) {
     return {
       spaceMemberships: {
         added: 0,
-        failed: addedSpaces.length,
-        errors: addedSpaces.map(() => "unknown"),
+        failed: spaces.length,
+        errors: spaces.map(() => "unknown"),
       },
     };
   }
