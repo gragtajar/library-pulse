@@ -3,7 +3,10 @@
  * Google Chat delivery, the counterpart of lib/email-delivery.js:
  *
  *   ensureAppMemberships  after a config save, add the Library Pulse app to
- *                         the newly chosen spaces with the USER's token.
+ *                         the chosen spaces with the USER's token.
+ *   spacesNeedingApp      which of a config's stored spaces have no recorded
+ *                         membership (a refused or never-attempted add), so a
+ *                         later save can try those again, not only new ones.
  *   sendPublishChats      on a publish, post the update to each space as the
  *                         APP, deduped per space via notification_log
  *                         (`recipient` = the space name) so a Figma retry
@@ -85,10 +88,54 @@ export async function ensureAppMemberships(installation, spaces) {
       failed++;
       const code = err instanceof ChatApiError ? err.code : "unknown";
       errors.push(code);
-      logger.warn("gchat_add_app_failed", { space: space.name, code });
+      logger.warn("gchat_add_app_failed", { space: space.name, code, ...chatErrorFields(err) });
     }
   }
   return { added, failed, errors };
+}
+
+/**
+ * The spaces among `spaces` with no recorded membership: no `gchat_spaces`
+ * row at all (the add was refused, so nothing was remembered) or one that
+ * says the app was removed. A save re-tries exactly these.
+ *
+ * @param {ConfigSpace[]} spaces
+ * @returns {Promise<ConfigSpace[]>}
+ */
+export async function spacesNeedingApp(spaces) {
+  if (spaces.length === 0) return [];
+  const { data: rows, error } = await supabase
+    .from("gchat_spaces")
+    .select("space_name, app_member")
+    .in(
+      "space_name",
+      spaces.map((s) => s.name),
+    );
+  if (error) {
+    logger.warn("gchat_space_lookup_failed", { err: error });
+    return [];
+  }
+  const member = new Set(
+    (rows ?? []).filter((r) => r.app_member === true).map((r) => r.space_name),
+  );
+  return spaces.filter((s) => !member.has(s.name));
+}
+
+/**
+ * What Google said, for the log line: the HTTP status, its `ErrorInfo.reason`
+ * and the start of its message. None of these carry a token or an address.
+ *
+ * @param {unknown} err
+ */
+function chatErrorFields(err) {
+  if (!(err instanceof ChatApiError)) {
+    return { detail: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200) };
+  }
+  return {
+    status: err.status,
+    ...(err.reason ? { reason: err.reason } : {}),
+    ...(err.detail ? { detail: err.detail.slice(0, 200) } : {}),
+  };
 }
 
 /**
@@ -186,7 +233,12 @@ export async function sendPublishChats({ config, payload, fileKey, eventKey }) {
       }
       failed++;
       errorCodes.push(code);
-      logger.warn("gchat_post_failed", { config_id: config.id, space: space.name, code });
+      logger.warn("gchat_post_failed", {
+        config_id: config.id,
+        space: space.name,
+        code,
+        ...chatErrorFields(err),
+      });
     }
   }
 

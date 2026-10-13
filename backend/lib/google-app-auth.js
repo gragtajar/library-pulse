@@ -68,14 +68,34 @@ export class AppAuthError extends Error {
 /** @type {import("google-auth-library").AuthClient | null} */
 let client = null;
 
+/**
+ * The federation names the client was built with, for the failure log: the
+ * pool/provider address Google is asked for and the account impersonated.
+ * Both are identifiers, not credentials.
+ *
+ * @type {{ audience: string, service_account: string } | null}
+ */
+let wifNames = null;
+
+/**
+ * A federation setting, with surrounding whitespace dropped: a stray space or
+ * newline pasted into a dashboard field would otherwise end up inside the
+ * audience URL, and Google answers that with "invalid_target".
+ *
+ * @param {string} name
+ */
+function gcpSetting(name) {
+  return (process.env[name] ?? "").trim();
+}
+
 /** Which credential source the environment configures, or null. */
 export function appAuthMode() {
   if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) return "key";
   if (
-    process.env.GCP_PROJECT_NUMBER &&
-    process.env.GCP_WORKLOAD_IDENTITY_POOL_ID &&
-    process.env.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID &&
-    process.env.GCP_SERVICE_ACCOUNT_EMAIL
+    gcpSetting("GCP_PROJECT_NUMBER") &&
+    gcpSetting("GCP_WORKLOAD_IDENTITY_POOL_ID") &&
+    gcpSetting("GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID") &&
+    gcpSetting("GCP_SERVICE_ACCOUNT_EMAIL")
   ) {
     return "wif";
   }
@@ -95,7 +115,9 @@ export async function getAppAccessToken(opts = {}) {
   } catch (err) {
     if (err instanceof AppAuthError) throw err;
     const detail = err instanceof Error ? err.message : String(err);
-    logger.error("google_app_auth_failed", { mode: appAuthMode(), detail });
+    // With the names in the line, "invalid_target" (no such pool/provider)
+    // and an impersonation refusal point straight at the setting to fix.
+    logger.error("google_app_auth_failed", { mode: appAuthMode(), detail, ...(wifNames ?? {}) });
     throw new AppAuthError("app_auth_failed", detail);
   }
 }
@@ -123,13 +145,15 @@ function keyClient() {
 }
 
 function wifClient() {
-  const projectNumber = process.env.GCP_PROJECT_NUMBER;
-  const pool = process.env.GCP_WORKLOAD_IDENTITY_POOL_ID;
-  const provider = process.env.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID;
-  const serviceAccount = process.env.GCP_SERVICE_ACCOUNT_EMAIL;
+  const projectNumber = gcpSetting("GCP_PROJECT_NUMBER");
+  const pool = gcpSetting("GCP_WORKLOAD_IDENTITY_POOL_ID");
+  const provider = gcpSetting("GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID");
+  const serviceAccount = gcpSetting("GCP_SERVICE_ACCOUNT_EMAIL");
+  const audience = `//iam.googleapis.com/projects/${projectNumber}/locations/global/workloadIdentityPools/${pool}/providers/${provider}`;
+  wifNames = { audience, service_account: serviceAccount };
   const external = ExternalAccountClient.fromJSON({
     type: "external_account",
-    audience: `//iam.googleapis.com/projects/${projectNumber}/locations/global/workloadIdentityPools/${pool}/providers/${provider}`,
+    audience,
     subject_token_type: "urn:ietf:params:oauth:token-type:jwt",
     token_url: "https://sts.googleapis.com/v1/token",
     service_account_impersonation_url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${serviceAccount}:generateAccessToken`,
@@ -146,5 +170,6 @@ function wifClient() {
 /** Test seam: forget the cached client and the remembered token. */
 export function _resetAppAuthClient() {
   client = null;
+  wifNames = null;
   requestOidcToken = "";
 }

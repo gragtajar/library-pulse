@@ -47,10 +47,12 @@ import {
   ensureAppMemberships,
   normalizeSpaceList,
   sendPublishChats,
+  spacesNeedingApp,
 } from "../backend/lib/gchat-delivery.js";
 import { ChatApiError } from "../backend/lib/google-chat.js";
 import { AppAuthError } from "../backend/lib/google-app-auth.js";
 import { UpstreamError } from "../backend/lib/errors.js";
+import { logger } from "../backend/lib/logger.js";
 
 const INST = /** @type {any} */ ({ id: "inst-1", refresh_token_enc: "x", revoked_at: null });
 const CONFIG = {
@@ -128,6 +130,53 @@ describe("ensureAppMemberships", () => {
     expect(r).toEqual({ added: 0, failed: 2, errors: ["google_revoked", "google_revoked"] });
     expect(h.addAppToSpace).not.toHaveBeenCalled();
   });
+
+  it("logs what Google said when a space refuses the app, never the token", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    h.addAppToSpace.mockImplementationOnce(async () => {
+      throw new ChatApiError(
+        "permission_denied",
+        403,
+        "The caller does not have permission",
+        "ACCESS_TOKEN_SCOPE_INSUFFICIENT",
+      );
+    });
+    await ensureAppMemberships(INST, [CONFIG.gchat_spaces[0]]);
+    expect(warn).toHaveBeenCalledWith("gchat_add_app_failed", {
+      space: "spaces/AAA",
+      code: "permission_denied",
+      status: 403,
+      reason: "ACCESS_TOKEN_SCOPE_INSUFFICIENT",
+      detail: "The caller does not have permission",
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("user-token");
+    warn.mockRestore();
+  });
+
+  it("nothing was remembered for a refused space, so it is still 'needing the app'", async () => {
+    h.addAppToSpace.mockImplementationOnce(async () => {
+      throw new ChatApiError("permission_denied", 403);
+    });
+    await ensureAppMemberships(INST, CONFIG.gchat_spaces);
+    expect(await spacesNeedingApp(CONFIG.gchat_spaces)).toEqual([CONFIG.gchat_spaces[0]]);
+  });
+});
+
+describe("spacesNeedingApp", () => {
+  it("returns spaces with no membership row, or one that says the app was removed", async () => {
+    h.db.tables.gchat_spaces.push(
+      { space_name: "spaces/AAA", app_member: true },
+      { space_name: "spaces/BBB", app_member: false },
+    );
+    const spaces = [
+      { name: "spaces/AAA", display_name: "Design" },
+      { name: "spaces/BBB", display_name: "Ops" },
+      { name: "spaces/CCC", display_name: "New" },
+    ];
+    expect(await spacesNeedingApp(spaces)).toEqual([spaces[1], spaces[2]]);
+    expect(await spacesNeedingApp([spaces[0]])).toEqual([]);
+    expect(await spacesNeedingApp([])).toEqual([]);
+  });
 });
 
 describe("sendPublishChats", () => {
@@ -189,8 +238,9 @@ describe("sendPublishChats", () => {
   });
 
   it("records a space that no longer has the app, and keeps going", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     h.postMessage.mockImplementationOnce(async () => {
-      throw new ChatApiError("not_found", 404);
+      throw new ChatApiError("not_found", 404, "Space not found.");
     });
     const r = await sendPublishChats({
       config: CONFIG,
@@ -199,6 +249,14 @@ describe("sendPublishChats", () => {
       eventKey: "ev3",
     });
     expect(r).toMatchObject({ sent: 1, failed: 1, errorCodes: ["not_found"] });
+    expect(warn).toHaveBeenCalledWith("gchat_post_failed", {
+      config_id: "cfg-1",
+      space: "spaces/AAA",
+      code: "not_found",
+      status: 404,
+      detail: "Space not found.",
+    });
+    warn.mockRestore();
     expect(log().find((l) => l.recipient === "spaces/AAA")).toMatchObject({
       status: "failed",
       error_message: "not_found",

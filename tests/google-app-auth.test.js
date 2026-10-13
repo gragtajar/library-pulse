@@ -25,6 +25,7 @@ import {
   rememberVercelOidcToken,
   vercelSubjectToken,
 } from "../backend/lib/google-app-auth.js";
+import { logger } from "../backend/lib/logger.js";
 
 const WIF_ENV = {
   GCP_PROJECT_NUMBER: "33343489691",
@@ -78,9 +79,11 @@ describe("appAuthMode", () => {
     expect(appAuthMode()).toBe("key");
   });
 
-  it("needs all four federation settings", () => {
+  it("needs all four federation settings, and whitespace isn't a setting", () => {
     Object.assign(process.env, WIF_ENV);
     delete process.env.GCP_SERVICE_ACCOUNT_EMAIL;
+    expect(appAuthMode()).toBeNull();
+    process.env.GCP_SERVICE_ACCOUNT_EMAIL = "  \n";
     expect(appAuthMode()).toBeNull();
   });
 });
@@ -132,6 +135,57 @@ describe("getAppAccessToken", () => {
       "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/library-pulse-chat@library-pulse-510320.iam.gserviceaccount.com:generateAccessToken",
     );
     expect(await options.subject_token_supplier.getSubjectToken()).toBe("req.uest.token");
+    spy.mockRestore();
+  });
+
+  it("drops whitespace pasted around the federation settings", async () => {
+    Object.assign(process.env, {
+      GCP_PROJECT_NUMBER: " 33343489691\n",
+      GCP_WORKLOAD_IDENTITY_POOL_ID: "vercel ",
+      GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: "\tvercel",
+      GCP_SERVICE_ACCOUNT_EMAIL:
+        " library-pulse-chat@library-pulse-510320.iam.gserviceaccount.com ",
+    });
+    const { ExternalAccountClient } = await import("google-auth-library");
+    const spy = vi
+      .spyOn(ExternalAccountClient, "fromJSON")
+      .mockImplementation(
+        () => /** @type {any} */ ({ getAccessToken: async () => ({ token: "ya29.fake" }) }),
+      );
+    await getAppAccessToken();
+    const options = /** @type {any} */ (spy.mock.calls[0][0]);
+    expect(options.audience).toBe(
+      "//iam.googleapis.com/projects/33343489691/locations/global/workloadIdentityPools/vercel/providers/vercel",
+    );
+    expect(options.service_account_impersonation_url).toBe(
+      "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/library-pulse-chat@library-pulse-510320.iam.gserviceaccount.com:generateAccessToken",
+    );
+    spy.mockRestore();
+  });
+
+  it("names the pool address and the account in the failure log", async () => {
+    Object.assign(process.env, WIF_ENV);
+    const { ExternalAccountClient } = await import("google-auth-library");
+    const spy = vi.spyOn(ExternalAccountClient, "fromJSON").mockImplementation(
+      () =>
+        /** @type {any} */ ({
+          getAccessToken: async () => {
+            throw new Error(
+              'Error code invalid_target: The target service indicated by the "audience" parameters is invalid.',
+            );
+          },
+        }),
+    );
+    const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+    await expect(getAppAccessToken()).rejects.toMatchObject({ code: "app_auth_failed" });
+    expect(error).toHaveBeenCalledWith("google_app_auth_failed", {
+      mode: "wif",
+      detail: expect.stringContaining("invalid_target"),
+      audience:
+        "//iam.googleapis.com/projects/33343489691/locations/global/workloadIdentityPools/vercel/providers/vercel",
+      service_account: "library-pulse-chat@library-pulse-510320.iam.gserviceaccount.com",
+    });
+    error.mockRestore();
     spy.mockRestore();
   });
 });

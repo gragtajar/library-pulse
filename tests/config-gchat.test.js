@@ -208,8 +208,9 @@ describe("PUT /api/config — Google Chat", () => {
       custom_mentions: [],
     });
 
-  it("adds the app only to spaces that are new to the config", async () => {
+  it("adds the app only to spaces that are new to the config, when the stored one has it", async () => {
     seed();
+    h.db.tables.gchat_spaces = [{ space_name: SPACES[0].name, app_member: true }];
     const res = await call("PUT", { as: EDITOR, body: { fileKey: FILE, gchatSpaces: SPACES } });
     expect(res.statusCode).toBe(200);
     expect(h.assertFileAccess).toHaveBeenCalledWith(EDITOR, FILE);
@@ -217,6 +218,38 @@ describe("PUT /api/config — Google Chat", () => {
     expect(configs()[0].google_installation_id).toBe(INST); // another editor keeps the setter's account
     expect(h.ensureAppMemberships.mock.calls[0][1]).toEqual([SPACES[1]]);
     expect(res.body.spaceMemberships).toEqual({ added: 1, failed: 0, errors: [] });
+  });
+
+  it("re-tries a stored space the app isn't in on any save, not only a new one", async () => {
+    seed();
+    // No membership row: the add was refused when the space was chosen.
+    let res = await call("PUT", { body: { fileKey: FILE, gchatSpaces: [SPACES[0]] } });
+    expect(res.statusCode).toBe(200);
+    expect(h.ensureAppMemberships.mock.calls[0][1]).toEqual([SPACES[0]]);
+    expect(res.body.spaceMemberships).toEqual({ added: 1, failed: 0, errors: [] });
+
+    // A row that says the app was removed from the space: tried again too,
+    // even by a save that only changes the note.
+    h.ensureAppMemberships.mockClear();
+    h.db.tables.gchat_spaces = [{ space_name: SPACES[0].name, app_member: false }];
+    res = await call("PUT", { body: { fileKey: FILE, customMessage: "Heads up" } });
+    expect(res.statusCode).toBe(200);
+    expect(h.ensureAppMemberships.mock.calls[0][1]).toEqual([SPACES[0]]);
+
+    // New and still-missing spaces are tried together, each once.
+    h.ensureAppMemberships.mockClear();
+    res = await call("PUT", { body: { fileKey: FILE, gchatSpaces: SPACES } });
+    expect(h.ensureAppMemberships.mock.calls[0][1]).toEqual([SPACES[1], SPACES[0]]);
+    expect(res.body.spaceMemberships).toEqual({ added: 2, failed: 0, errors: [] });
+  });
+
+  it("leaves memberships alone when every stored space already has the app", async () => {
+    seed();
+    h.db.tables.gchat_spaces = [{ space_name: SPACES[0].name, app_member: true }];
+    const res = await call("PUT", { body: { fileKey: FILE, customMessage: "Heads up" } });
+    expect(res.statusCode).toBe(200);
+    expect(h.ensureAppMemberships).not.toHaveBeenCalled();
+    expect(res.body).not.toHaveProperty("spaceMemberships");
   });
 
   it("switching to email clears the Google Chat side", async () => {
