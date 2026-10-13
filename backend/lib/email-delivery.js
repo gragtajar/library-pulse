@@ -19,7 +19,12 @@ import supabase from "./supabase.js";
 import { logger } from "./logger.js";
 import { buildConfirmEmail, buildPublishEmail } from "./email-message.js";
 import { mintEmailToken } from "./email-tokens.js";
-import { confirmedRecipients, maskEmail, normalizeRecipientList } from "./email-recipients.js";
+import {
+  confirmedRecipients,
+  maskEmail,
+  normalizeRecipientList,
+  recordConfirmationAttempt,
+} from "./email-recipients.js";
 import { EmailSendError, sendEmail } from "./email-send.js";
 import { hasSentEmailDelivery } from "./idempotency.js";
 
@@ -42,18 +47,24 @@ const PUBLISH_EVENT = "LIBRARY_PUBLISH";
  */
 
 /**
- * Send the double-opt-in confirmation to newly added addresses. Never throws:
- * a save must succeed even when mail is down; the summary tells the plugin
- * what happened.
+ * Send the double-opt-in confirmation to the given (pending) addresses: the
+ * ones a save just added, or the one behind the dashboard's "Resend". Never
+ * throws: a save must succeed even when mail is down; the summary tells the
+ * plugin what happened. Each attempt's outcome is recorded on the address
+ * (`recordConfirmationAttempt`), and the updated list is returned as
+ * `recipients` so the response can show it; it's absent when nothing was
+ * attempted or the record couldn't be written.
  *
  * @param {EmailConfig} config
  * @param {string[]} emails
- * @returns {Promise<{ sent: number, failed: number, skipped: number }>}
+ * @returns {Promise<{ sent: number, failed: number, skipped: number, recipients?: import("./email-recipients.js").Recipient[] }>}
  */
 export async function sendConfirmations(config, emails) {
   let sent = 0;
   let failed = 0;
   let skipped = 0;
+  /** @type {Array<{ email: string, error: string | null }>} */
+  const attempts = [];
 
   for (const chunk of chunked(emails, SEND_CONCURRENCY)) {
     const results = await Promise.allSettled(
@@ -72,7 +83,13 @@ export async function sendConfirmations(config, emails) {
           recipient: email,
           confirmUrl,
         });
-        await sendLogged({ to: email, ...mail }, config, CONFIRM_EVENT, null);
+        try {
+          await sendLogged({ to: email, ...mail }, config, CONFIRM_EVENT, null);
+        } catch (err) {
+          attempts.push({ email, error: err instanceof EmailSendError ? err.code : "unknown" });
+          throw err;
+        }
+        attempts.push({ email, error: null });
         return "sent";
       }),
     );
@@ -83,8 +100,41 @@ export async function sendConfirmations(config, emails) {
     }
   }
 
+  const recipients = attempts.length > 0 ? await recordAttempts(config.id, attempts) : null;
   logger.info("email_confirmations_dispatched", { config_id: config.id, sent, failed, skipped });
-  return { sent, failed, skipped };
+  return { sent, failed, skipped, ...(recipients ? { recipients } : {}) };
+}
+
+/**
+ * Write the outcome of each confirmation attempt onto the config's current
+ * recipient list (re-read first: a confirmation click may have landed since
+ * the save). Returns the updated list, or null when it couldn't be written;
+ * the sends themselves already happened and are logged either way.
+ *
+ * @param {string} configId
+ * @param {Array<{ email: string, error: string | null }>} attempts
+ */
+async function recordAttempts(configId, attempts) {
+  const { data, error } = await supabase
+    .from("configurations")
+    .select("email_recipients")
+    .eq("id", configId)
+    .maybeSingle();
+  if (error || !data) {
+    logger.warn("email_attempt_record_failed", { config_id: configId, err: error });
+    return null;
+  }
+  let list = normalizeRecipientList(data.email_recipients);
+  for (const a of attempts) list = recordConfirmationAttempt(list, a.email, a.error);
+  const { error: upErr } = await supabase
+    .from("configurations")
+    .update({ email_recipients: list })
+    .eq("id", configId);
+  if (upErr) {
+    logger.warn("email_attempt_record_failed", { config_id: configId, err: upErr });
+    return null;
+  }
+  return list;
 }
 
 /**

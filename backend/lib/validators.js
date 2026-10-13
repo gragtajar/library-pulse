@@ -283,6 +283,21 @@ export function normalizeEmail(v) {
 }
 
 /**
+ * One email address, normalized (the dashboard's "Resend" names one).
+ *
+ * @param {unknown} v
+ * @returns {string}
+ */
+export function assertEmail(v) {
+  if (typeof v !== "string") throw new ValidationError("Email address must be a string");
+  const email = normalizeEmail(v);
+  if (!isValidEmail(email)) {
+    throw new ValidationError(`Invalid email address: ${email.slice(0, 80)}`);
+  }
+  return email;
+}
+
+/**
  * Validate the email destination's recipient list: 1–5 well-formed addresses,
  * normalized and de-duplicated (order preserved).
  *

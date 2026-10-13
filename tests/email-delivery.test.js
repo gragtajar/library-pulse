@@ -242,6 +242,49 @@ describe("sendConfirmations", () => {
     expect((h.db.tables.notification_log ?? []).every((row) => row.status === "failed")).toBe(true);
   });
 
+  it("records each attempt on the address and returns the updated list", async () => {
+    h.db.tables.configurations = [
+      { id: CONFIG.id, email_recipients: structuredClone(CONFIG.email_recipients) },
+    ];
+    const sent = await sendConfirmations(CONFIG, ["cho@example.com"]);
+    expect(sent).toMatchObject({ sent: 1, failed: 0, skipped: 0 });
+    const cho = sent.recipients?.find((r) => r.email === "cho@example.com");
+    expect(cho?.confirmation_sent_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(cho?.confirmation_error).toBeUndefined();
+    expect(sent.recipients?.find((r) => r.email === "ana@example.com")).toEqual(
+      CONFIG.email_recipients[0],
+    );
+    expect(h.db.tables.configurations[0].email_recipients).toEqual(sent.recipients);
+
+    h.sendEmail.mockImplementation(async () => {
+      throw new EmailSendError("UnrecognizedClientException");
+    });
+    const failed = await sendConfirmations(CONFIG, ["cho@example.com"]);
+    expect(failed).toMatchObject({ sent: 0, failed: 1, skipped: 0 });
+    expect(failed.recipients?.find((r) => r.email === "cho@example.com")).toMatchObject({
+      status: "pending",
+      confirmation_sent_at: cho?.confirmation_sent_at,
+      confirmation_error: "UnrecognizedClientException",
+    });
+  });
+
+  it("records nothing for a rate-limited address, and copes with a vanished config", async () => {
+    h.db.tables.configurations = [
+      { id: CONFIG.id, email_recipients: structuredClone(CONFIG.email_recipients) },
+    ];
+    for (let i = 0; i < CONFIRMATIONS_PER_ADDRESS_PER_DAY; i++) {
+      await sendConfirmations(CONFIG, ["cho@example.com"]);
+    }
+    const before = structuredClone(h.db.tables.configurations[0].email_recipients);
+    const over = await sendConfirmations(CONFIG, ["cho@example.com"]);
+    expect(over).toEqual({ sent: 0, failed: 0, skipped: 1 });
+    expect(h.db.tables.configurations[0].email_recipients).toEqual(before);
+
+    h.db.tables.configurations = [];
+    const gone = await sendConfirmations(CONFIG, ["eve@example.com"]);
+    expect(gone).toEqual({ sent: 1, failed: 0, skipped: 0 });
+  });
+
   it("a failed confirmation doesn't use up the daily allowance", async () => {
     h.sendEmail.mockImplementation(async () => {
       throw new EmailSendError("timeout");

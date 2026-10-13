@@ -122,6 +122,41 @@ export async function spacesNeedingApp(spaces) {
 }
 
 /**
+ * The membership state of each chosen space, for the dashboard: `app_member`
+ * true (the app is in the space), false (it was removed) or null (nothing
+ * recorded, which after a save means the add was refused); `muted` when the
+ * space said "stop". Throws on a lookup failure so the caller can leave the
+ * states out rather than show every space as missing.
+ *
+ * @param {ConfigSpace[]} spaces
+ * @returns {Promise<Array<{ name: string, display_name: string, app_member: boolean | null, muted: boolean }>>}
+ */
+export async function membershipStates(spaces) {
+  if (spaces.length === 0) return [];
+  const { data: rows, error } = await supabase
+    .from("gchat_spaces")
+    .select("space_name, app_member, muted")
+    .in(
+      "space_name",
+      spaces.map((s) => s.name),
+    );
+  if (error) {
+    logger.warn("gchat_space_lookup_failed", { err: error });
+    throw new UpstreamError("gchat_space_lookup_failed");
+  }
+  const byName = new Map((rows ?? []).map((r) => [r.space_name, r]));
+  return spaces.map((s) => {
+    const row = byName.get(s.name);
+    return {
+      name: s.name,
+      display_name: s.display_name ?? "",
+      app_member: row ? row.app_member === true : null,
+      muted: row?.muted === true,
+    };
+  });
+}
+
+/**
  * What Google said, for the log line: the HTTP status, its `ErrorInfo.reason`
  * and the start of its message. None of these carry a token or an address.
  *

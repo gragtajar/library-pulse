@@ -4,7 +4,8 @@
  * `configurations.email_recipients` JSONB column (migration 006):
  *
  *   [{ email, status: "pending" | "confirmed" | "unsubscribed",
- *      added_at, confirmed_at }]
+ *      added_at, confirmed_at,
+ *      confirmation_sent_at?, confirmation_error? }]
  *
  * Double opt-in: an address is added as "pending", becomes "confirmed" only
  * when its owner clicks the confirmation link, and only confirmed addresses
@@ -13,10 +14,24 @@
  * address has to be removed and added again, which sends a fresh
  * confirmation the owner can ignore. Everything here is I/O-free so it's
  * unit-testable; the handlers do the reads and writes.
+ *
+ * The last confirmation attempt is kept on the entry (`confirmation_sent_at`
+ * when one went out, `confirmation_error` with the send error's code when it
+ * didn't), so the dashboard can say "the email never went out" instead of
+ * "pending", and offer to send it again. Both are absent on entries from
+ * before this was recorded.
  */
 
 /** @typedef {"pending" | "confirmed" | "unsubscribed"} RecipientStatus */
-/** @typedef {{ email: string, status: RecipientStatus, added_at: string, confirmed_at: string | null }} Recipient */
+/**
+ * @typedef {Object} Recipient
+ * @property {string} email
+ * @property {RecipientStatus} status
+ * @property {string} added_at
+ * @property {string | null} confirmed_at
+ * @property {string | null} [confirmation_sent_at]  when the last confirmation email went out
+ * @property {string | null} [confirmation_error]    the send error of the last attempt, if it failed
+ */
 
 const STATUSES = new Set(["pending", "confirmed", "unsubscribed"]);
 
@@ -41,9 +56,36 @@ export function normalizeRecipientList(raw) {
       status: /** @type {RecipientStatus} */ (status),
       added_at: typeof e.added_at === "string" ? e.added_at : "",
       confirmed_at: typeof e.confirmed_at === "string" ? e.confirmed_at : null,
+      ...(typeof e.confirmation_sent_at === "string"
+        ? { confirmation_sent_at: e.confirmation_sent_at }
+        : {}),
+      ...(typeof e.confirmation_error === "string" && e.confirmation_error
+        ? { confirmation_error: e.confirmation_error.slice(0, 80) }
+        : {}),
     });
   }
   return out;
+}
+
+/**
+ * Return a copy of the list with the outcome of one address's confirmation
+ * attempt recorded: a send stamps `confirmation_sent_at` and clears any
+ * earlier error; a failure keeps the last send time and records the error's
+ * code. An address no longer on the list leaves the list unchanged.
+ *
+ * @param {Recipient[]} list
+ * @param {string} email
+ * @param {string | null} error  the send error's code, or null for a send
+ * @param {string} [now]
+ * @returns {Recipient[]}
+ */
+export function recordConfirmationAttempt(list, email, error, now = new Date().toISOString()) {
+  return list.map((r) => {
+    if (r.email !== email) return r;
+    if (error) return { ...r, confirmation_error: error.slice(0, 80) };
+    const { confirmation_error: _cleared, ...rest } = r;
+    return { ...rest, confirmation_sent_at: now };
+  });
 }
 
 /**

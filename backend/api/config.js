@@ -12,11 +12,17 @@
  *                        Email:  { destination: "email", emailRecipients, timezone }
  *   PUT    { id|fileKey, …updates } → any edit-access user updates channels or
  *                        recipients, the note, or switches destination.
+ *   PUT    { id|fileKey, resendConfirmation: "<address>" }
+ *                      → send one pending address its confirmation again (the
+ *                        dashboard's "Resend"); same per-address daily limit.
  *
  * A config targets ONE destination (lib/config-destination.js plans the
  * columns). Newly added email addresses are sent a confirmation and stay
  * "pending" until their owner confirms; the response's `emailConfirmations`
- * says how many confirmations went out.
+ * says how many confirmations went out, and each address carries the outcome
+ * of its last attempt (lib/email-recipients.js). A Google Chat config's
+ * responses carry `gchat_memberships`: whether the app is in each chosen
+ * space, so the dashboard can say when it isn't and offer a retry.
  *   DELETE ?id=…|?fileKey=… → deactivate the config (any edit-access user); the
  *                        original setter also tears down the Figma webhook.
  *
@@ -41,6 +47,7 @@ import { requireSession } from "../lib/session.js";
 import { ForbiddenError, NotFoundError, UpstreamError, ValidationError } from "../lib/errors.js";
 import {
   assertCustomMessage,
+  assertEmail,
   assertFigmaFileKey,
   assertMentionList,
   assertUuid,
@@ -48,8 +55,10 @@ import {
 import { assertFileAccess, getFigmaAccessToken } from "../lib/figma-access.js";
 import { planCreate, planUpdate } from "../lib/config-destination.js";
 import { sendConfirmations } from "../lib/email-delivery.js";
+import { normalizeRecipientList } from "../lib/email-recipients.js";
 import {
   ensureAppMemberships,
+  membershipStates,
   normalizeSpaceList,
   spacesNeedingApp,
 } from "../lib/gchat-delivery.js";
@@ -119,7 +128,9 @@ async function handleGet(req, res) {
     if (!data) return res.status(200).json({ config: null });
     // Trust the setter; access-check only OTHER users viewing the shared config.
     if (data.created_by !== callerId) await assertFileAccess(callerId, fileKey);
-    return res.status(200).json({ config: data, isOwner: data.created_by === callerId });
+    return res
+      .status(200)
+      .json({ config: await withChatMemberships(data), isOwner: data.created_by === callerId });
   }
 
   // ── Legacy path (currently-live plugin): the caller's own configs ──
@@ -198,7 +209,7 @@ async function handlePost(req, res) {
     const emailConfirmations = await confirmNewRecipients(updated, plan.addedEmails);
     const spaceMemberships = await addAppToSpaces(updated, plan.addedSpaces);
     return res.status(200).json({
-      ...updated,
+      ...(await withChatMemberships(updated)),
       webhookStatus,
       isOwner: true,
       ...emailConfirmations,
@@ -242,9 +253,13 @@ async function handlePost(req, res) {
   const webhookStatus = await registerWebhookReporting(callerId, fileKey);
   const emailConfirmations = await confirmNewRecipients(config, createPlan.addedEmails);
   const spaceMemberships = await addAppToSpaces(config, createPlan.addedSpaces);
-  return res
-    .status(201)
-    .json({ ...config, webhookStatus, isOwner: true, ...emailConfirmations, ...spaceMemberships });
+  return res.status(201).json({
+    ...(await withChatMemberships(config)),
+    webhookStatus,
+    isOwner: true,
+    ...emailConfirmations,
+    ...spaceMemberships,
+  });
 }
 
 /**
@@ -261,6 +276,11 @@ async function handlePut(req, res) {
   // Any edit-access user may change a file's shared config. The setter is trusted
   // without a probe; other users are access-checked (needs webhooks:read).
   if (row.created_by !== callerId) await assertFileAccess(callerId, row.figma_file_key);
+
+  // "Resend" on the dashboard: one address, nothing else changes.
+  if (body.resendConfirmation !== undefined) {
+    return resendConfirmation(res, row, body.resendConfirmation, callerId);
+  }
 
   // Destination columns: channels / workspace, or email recipients / timezone,
   // including a switch from one destination to the other.
@@ -297,7 +317,7 @@ async function handlePut(req, res) {
   const emailConfirmations = await confirmNewRecipients(data, plan.addedEmails);
   const spaceMemberships = await addAppToSpaces(data, plan.addedSpaces);
   return res.status(200).json({
-    ...data,
+    ...(await withChatMemberships(data)),
     isOwner: row.created_by === callerId,
     ...emailConfirmations,
     ...spaceMemberships,
@@ -348,23 +368,87 @@ async function handleDelete(req, res) {
 /**
  * Send the double-opt-in confirmation to addresses this write just added.
  * Returns the fragment to merge into the response (`{}` when there was
- * nothing to send). Never throws — the config is already saved, and a mail
- * outage must not turn that into an error.
+ * nothing to send): the counts, and the recipient list with each attempt's
+ * outcome recorded, which overrides the list the save returned. Never
+ * throws — the config is already saved, and a mail outage must not turn that
+ * into an error.
  *
  * @param {any} config  the saved row
  * @param {string[]} addedEmails
- * @returns {Promise<{ emailConfirmations?: { sent: number, failed: number, skipped: number } }>}
+ * @returns {Promise<{ emailConfirmations?: { sent: number, failed: number, skipped: number }, email_recipients?: unknown }>}
  */
 async function confirmNewRecipients(config, addedEmails) {
   if (addedEmails.length === 0) return {};
   try {
-    return { emailConfirmations: await sendConfirmations(config, addedEmails) };
+    const { recipients, ...counts } = await sendConfirmations(config, addedEmails);
+    return { emailConfirmations: counts, ...(recipients ? { email_recipients: recipients } : {}) };
   } catch (err) {
     logger.warn("email_confirmations_failed", {
       config_id: config?.id,
       reason: err instanceof Error ? err.message : String(err),
     });
     return { emailConfirmations: { sent: 0, failed: addedEmails.length, skipped: 0 } };
+  }
+}
+
+/**
+ * The dashboard's "Resend": send one pending address its confirmation again,
+ * under the same per-address daily limit as a save. A confirmed address needs
+ * nothing, and an unsubscribed one stays unsubscribed until it's removed and
+ * added again (the unsubscribe is the owner's decision, not the editor's).
+ *
+ * @param {import("../lib/types.js").VercelResponse} res
+ * @param {any} row  the config, as located
+ * @param {unknown} emailRaw
+ * @param {string} callerId
+ */
+async function resendConfirmation(res, row, emailRaw, callerId) {
+  const email = assertEmail(emailRaw);
+  if (row.destination !== "email") throw new ValidationError("not_email_config");
+  const entry = normalizeRecipientList(row.email_recipients).find((r) => r.email === email);
+  // ValidationError: the only class whose message reaches the plugin as a code.
+  if (!entry) throw new ValidationError("recipient_not_found");
+  if (entry.status === "confirmed") throw new ValidationError("already_confirmed");
+  if (entry.status === "unsubscribed") throw new ValidationError("email_unsubscribed");
+
+  const { recipients, ...emailConfirmations } = await sendConfirmations(row, [email]);
+  const { data, error } = await supabase
+    .from("configurations")
+    .select(CONFIG_SELECT)
+    .eq("id", row.id)
+    .single();
+  if (error || !data) {
+    logger.error("config_fetch_failed", { err: error });
+    throw new UpstreamError("config_fetch_failed");
+  }
+  return res.status(200).json({
+    ...data,
+    ...(recipients ? { email_recipients: recipients } : {}),
+    isOwner: row.created_by === callerId,
+    emailConfirmations,
+  });
+}
+
+/**
+ * A Google Chat config with `gchat_memberships` added: whether the app is in
+ * each chosen space (lib/gchat-delivery.js). Other configs pass through. A
+ * failed lookup leaves the field out rather than show every space as missing.
+ *
+ * @template {Record<string, any> | null} T
+ * @param {T} config
+ * @returns {Promise<T>}
+ */
+async function withChatMemberships(config) {
+  if (!config || config.destination !== "gchat") return config;
+  try {
+    const gchat_memberships = await membershipStates(normalizeSpaceList(config.gchat_spaces));
+    return { ...config, gchat_memberships };
+  } catch (err) {
+    logger.warn("gchat_memberships_lookup_failed", {
+      config_id: config.id,
+      reason: err instanceof Error ? err.message : String(err),
+    });
+    return config;
   }
 }
 

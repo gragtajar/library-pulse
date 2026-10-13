@@ -97,6 +97,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Resend a confirmation email from the dashboard.** Every address that
+  hasn't confirmed yet has a **Resend** action next to its state
+  (`PUT /api/config { resendConfirmation }`, any editor of the file, the same
+  limit of three confirmation emails per address per day). Removing and
+  re-adding the address is no longer the only way.
+- **The dashboard says when something never happened, and keeps saying so.**
+  Each address now records the outcome of its last confirmation attempt
+  (`confirmation_sent_at` / `confirmation_error` on the entry), so an address
+  whose email never went out shows **Email not sent** (with the reason on
+  hover) instead of Pending, and a file where no confirmation could be sent
+  shows "The confirmation emails couldn't be sent" with the cause, not
+  "No one has confirmed yet". A Google Chat config's responses carry
+  `gchat_memberships` (whether the app is in each chosen space), and a space
+  the app isn't in shows "Library Pulse isn't in a space" with a **Retry**
+  that re-saves the same spaces, which adds the app again with the connected
+  Google account. Both replace a toast that was easy to miss, and both stay
+  until the state changes.
+- **The "Deliveries failing" banner says what kind of failure it was.** The
+  email service rejecting the server's credentials or sender address, or the
+  app failing to sign in to Google Chat (a server setting), is named as such,
+  so editors aren't told to check the addresses or the space when the fix is
+  on the server.
 - **Google Chat as a destination.** Step 2 gains a live Google Chat card. The user
   signs in with Google from the plugin (scopes `chat.spaces.readonly`,
   `chat.memberships.app`, `openid email`), picks up to three spaces they belong to,

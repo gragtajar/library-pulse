@@ -127,6 +127,12 @@ describe("POST /api/config — Google Chat", () => {
       isOwner: true,
       webhookStatus: "existing",
       spaceMemberships: { added: 2, failed: 0, errors: [] },
+      // Membership is read from gchat_spaces, which the (mocked) add didn't
+      // write, so nothing is recorded yet.
+      gchat_memberships: [
+        { name: "spaces/AAA", display_name: "Design", app_member: null, muted: false },
+        { name: "spaces/BBB", display_name: "Ops", app_member: null, muted: false },
+      ],
     });
     expect(configs()[0]).toMatchObject({
       destination: "gchat",
@@ -241,6 +247,32 @@ describe("PUT /api/config — Google Chat", () => {
     res = await call("PUT", { body: { fileKey: FILE, gchatSpaces: SPACES } });
     expect(h.ensureAppMemberships.mock.calls[0][1]).toEqual([SPACES[1], SPACES[0]]);
     expect(res.body.spaceMemberships).toEqual({ added: 2, failed: 0, errors: [] });
+  });
+
+  it("says whether the app is in each chosen space, on a read and after a save", async () => {
+    seed();
+    configs()[0].gchat_spaces = SPACES;
+    h.db.tables.gchat_spaces = [
+      { space_name: SPACES[0].name, app_member: true, muted: false },
+      { space_name: SPACES[1].name, app_member: false, muted: true },
+    ];
+    const read = await call("GET", { query: { fileKey: FILE } });
+    expect(read.statusCode).toBe(200);
+    expect(read.body.config.gchat_memberships).toEqual([
+      { name: SPACES[0].name, display_name: "Design", app_member: true, muted: false },
+      { name: SPACES[1].name, display_name: "Ops", app_member: false, muted: true },
+    ]);
+
+    // A space with no row at all (its add was refused) reads as null.
+    const extra = { name: "spaces/CCC", display_name: "New" };
+    const saved = await call("PUT", { body: { fileKey: FILE, gchatSpaces: [...SPACES, extra] } });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.body.gchat_memberships.map((m) => [m.name, m.app_member])).toEqual([
+      [SPACES[0].name, true],
+      [SPACES[1].name, false],
+      ["spaces/CCC", null],
+    ]);
+    expect(saved.body.spaceMemberships).toEqual({ added: 2, failed: 0, errors: [] });
   });
 
   it("leaves memberships alone when every stored space already has the app", async () => {
