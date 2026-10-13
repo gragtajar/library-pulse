@@ -236,15 +236,15 @@ The plugin walks you through four numbered steps:
 
    Then **Save & Activate** — the backend registers a `LIBRARY_PUBLISH` webhook on that file using your Figma authorization.
 
-If the file already has a config, anyone with edit access sees the same **shared config** and can edit its channels, spaces or addresses and its custom message — they don't start from a blank setup. For email, the dashboard lists every address with its state (Confirmed, Pending, Unsubscribed). Switching a file to another destination asks for a second click, because it removes the current destination's channels, spaces or addresses for everyone. Only the **original setter** can remove the Figma connection (delete the file's webhook); any editor can pause/disable notifications.
+If the file already has a config, anyone with edit access sees the same **shared config** and can edit its channels, spaces or addresses and its custom message — they don't start from a blank setup. For email, the dashboard lists every address with its state (Confirmed, Pending, Unsubscribed); an address whose confirmation email couldn't be sent shows **Email not sent** instead, with the reason on hover, and every unconfirmed address has a **Resend** action (at most 3 confirmation emails per address per day). For Google Chat, a chosen space the app isn't in shows a "Library Pulse isn't in a space" notice with a **Retry** that adds the app again with the connected Google account. Switching a file to another destination asks for a second click, because it removes the current destination's channels, spaces or addresses for everyone. Only the **original setter** can remove the Figma connection (delete the file's webhook); any editor can pause/disable notifications.
 
 ### When a library is published
 
 1. Figma fires a `LIBRARY_PUBLISH` webhook event for that file.
 2. The backend verifies the passcode (bound to the specific webhook and its file), then looks up the file's single active configuration.
 3. **Slack config:** it decrypts the stored Slack bot token and posts a rich Block Kit message to the configured channels (de-duplicated per channel so retries never double-post). The team's custom message — with real `@` mentions for picker-chosen people/groups — is included; publish times render in **each viewer's own timezone** (Slack date token). If Slack rejects the token, the config is flagged so the plugin shows a "Slack disconnected" banner with Slack's Add to Slack button.
-4. **Email config:** it sends one email per **confirmed** address through Amazon SES (de-duplicated per recipient, so a retry never emails anyone twice). The publish time is shown in the time zone saved with the address list. Every email has an unsubscribe link and one-click unsubscribe headers. If sends fail, the config is flagged so the plugin shows a "Deliveries failing" banner.
-5. **Google Chat config:** it posts the update in each chosen space as the Library Pulse app (de-duplicated per space, so a retry never posts twice). Spaces that removed the app, or were paused with `@Library Pulse stop`, are skipped. The publish time is shown in the time zone saved with the spaces. If posts fail, the config is flagged so the plugin shows a "Deliveries failing" banner.
+4. **Email config:** it sends one email per **confirmed** address through Amazon SES (de-duplicated per recipient, so a retry never emails anyone twice). The publish time is shown in the time zone saved with the address list. Every email has an unsubscribe link and one-click unsubscribe headers. If sends fail, the config is flagged so the plugin shows a "Deliveries failing" banner, which says whether the cause is the server's email setup (its credentials or sender address) or the addresses.
+5. **Google Chat config:** it posts the update in each chosen space as the Library Pulse app (de-duplicated per space, so a retry never posts twice). Spaces that removed the app, or were paused with `@Library Pulse stop`, are skipped. The publish time is shown in the time zone saved with the spaces. If posts fail, the config is flagged so the plugin shows a "Deliveries failing" banner, which says whether the app couldn't sign in to Google Chat (a server setting) or couldn't post to a space.
 6. Each notification is logged to the `notification_log` table.
 
 ---
@@ -384,7 +384,7 @@ The SES credentials use their own names on purpose. Vercel's function runtime ca
 
 8. **Bounced addresses aren't marked in the plugin yet.** Amazon SES stops delivering to an address that hard-bounces (its account-level suppression list) and forwards bounce and complaint notices to `EMAIL_FEEDBACK_ADDRESS`, but the plugin still lists the address as Confirmed.
 
-9. **A lost confirmation email** is re-sent by removing the address and adding it again (at most 3 per address per day).
+9. **A lost confirmation email** is re-sent with **Resend** next to the address on the dashboard (at most 3 per address per day); removing the address and adding it again also works.
 
 10. **One destination per file.** A file notifies Slack, email or Google Chat, not several.
 

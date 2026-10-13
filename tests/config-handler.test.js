@@ -226,7 +226,7 @@ describe("POST /api/config — email", () => {
     expect(h.sendEmail).not.toHaveBeenCalled();
   });
 
-  it("saves even when the confirmation can't be sent, and says so", async () => {
+  it("saves even when the confirmation can't be sent, and says so on each address", async () => {
     h.sendEmail.mockImplementation(async () => {
       throw new EmailSendError("not_configured");
     });
@@ -234,6 +234,31 @@ describe("POST /api/config — email", () => {
     expect(res.statusCode).toBe(201);
     expect(res.body.emailConfirmations).toEqual({ sent: 0, failed: 2, skipped: 0 });
     expect(configs()).toHaveLength(1);
+    // The response and the row both carry the outcome, so the dashboard can
+    // say the email never went out (and offer Resend) after a reload too.
+    for (const list of [res.body.email_recipients, configs()[0]?.email_recipients]) {
+      expect(list).toEqual([
+        expect.objectContaining({
+          email: "ana@example.com",
+          status: "pending",
+          confirmation_error: "not_configured",
+        }),
+        expect.objectContaining({
+          email: "ben@example.com",
+          status: "pending",
+          confirmation_error: "not_configured",
+        }),
+      ]);
+    }
+  });
+
+  it("a sent confirmation is stamped on the address", async () => {
+    const res = await call("POST", { body });
+    expect(res.body.email_recipients[0]).toMatchObject({
+      email: "ana@example.com",
+      confirmation_sent_at: expect.stringMatching(/^\d{4}-/),
+    });
+    expect(res.body.email_recipients[0]).not.toHaveProperty("confirmation_error");
   });
 
   it("the setter re-saving keeps confirmed addresses confirmed", async () => {
@@ -389,6 +414,96 @@ describe("PUT /api/config", () => {
   });
 });
 
+describe("PUT /api/config — resend a confirmation", () => {
+  const resend = (as, address) =>
+    call("PUT", { as, body: { fileKey: FILE, resendConfirmation: address } });
+
+  it("sends one pending address its confirmation again and returns the refreshed list", async () => {
+    seedConfig(EMAIL_ROW);
+    const res = await resend(OWNER, " Ben@Example.com ");
+    expect(res.statusCode).toBe(200);
+    expect(sentTo()).toEqual(["ben@example.com"]);
+    expect(res.body.emailConfirmations).toEqual({ sent: 1, failed: 0, skipped: 0 });
+    expect(res.body).toMatchObject({ isOwner: true, email_timezone: "Asia/Kolkata" });
+    expect(res.body.email_recipients).toEqual([
+      EMAIL_ROW.email_recipients[0], // untouched
+      expect.objectContaining({
+        email: "ben@example.com",
+        status: "pending",
+        confirmation_sent_at: expect.stringMatching(/^\d{4}-/),
+      }),
+    ]);
+    expect(configs()[0]?.email_recipients).toEqual(res.body.email_recipients);
+  });
+
+  it("any editor may resend; their file access is checked", async () => {
+    seedConfig(EMAIL_ROW);
+    const res = await resend(EDITOR, "ben@example.com");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isOwner).toBe(false);
+    expect(h.assertFileAccess).toHaveBeenCalledWith(EDITOR, FILE);
+  });
+
+  it("reports a failed send on the address", async () => {
+    seedConfig(EMAIL_ROW);
+    h.sendEmail.mockImplementation(async () => {
+      throw new EmailSendError("UnrecognizedClientException");
+    });
+    const res = await resend(OWNER, "ben@example.com");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.emailConfirmations).toEqual({ sent: 0, failed: 1, skipped: 0 });
+    expect(res.body.email_recipients[1]).toMatchObject({
+      email: "ben@example.com",
+      confirmation_error: "UnrecognizedClientException",
+    });
+    expect(configs()[0]?.email_recipients[1]).toMatchObject({
+      confirmation_error: "UnrecognizedClientException",
+    });
+  });
+
+  it("honours the per-address daily limit", async () => {
+    seedConfig(EMAIL_ROW);
+    for (let i = 0; i < 3; i++) {
+      h.db.tables.notification_log.push({
+        event_type: "EMAIL_CONFIRM",
+        status: "sent",
+        recipient: "ben@example.com",
+        created_at: new Date().toISOString(),
+      });
+    }
+    const res = await resend(OWNER, "ben@example.com");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.emailConfirmations).toEqual({ sent: 0, failed: 0, skipped: 1 });
+    expect(h.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("refuses a confirmed, unsubscribed, unknown or malformed address, and a non-email config", async () => {
+    seedConfig({
+      ...EMAIL_ROW,
+      email_recipients: [
+        ...EMAIL_ROW.email_recipients,
+        { email: "cho@example.com", status: "unsubscribed", added_at: NOW, confirmed_at: null },
+      ],
+    });
+    for (const [address, status, error] of [
+      ["ana@example.com", 400, "already_confirmed"],
+      ["cho@example.com", 400, "email_unsubscribed"],
+      ["dee@example.com", 400, "recipient_not_found"],
+      ["nope", 400, "Invalid email address: nope"],
+      [42, 400, "Email address must be a string"],
+    ]) {
+      const res = await resend(OWNER, address);
+      expect([address, res.statusCode]).toEqual([address, status]);
+      expect(res.body.error).toBe(error);
+    }
+    seedConfig(SLACK_ROW);
+    const res = await resend(OWNER, "ben@example.com");
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe("not_email_config");
+    expect(h.sendEmail).not.toHaveBeenCalled();
+  });
+});
+
 describe("GET /api/config and auth", () => {
   it("returns the shared config, addresses and states included", async () => {
     seedConfig(EMAIL_ROW);
@@ -396,6 +511,7 @@ describe("GET /api/config and auth", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.isOwner).toBe(false);
     expect(res.body.config.email_recipients).toEqual(EMAIL_ROW.email_recipients);
+    expect(res.body.config).not.toHaveProperty("gchat_memberships");
     expect(h.assertFileAccess).toHaveBeenCalledWith(EDITOR, FILE);
   });
 

@@ -4,6 +4,7 @@ import {
   confirmedRecipients,
   mergeRecipients,
   normalizeRecipientList,
+  recordConfirmationAttempt,
   setRecipientStatus,
 } from "../backend/lib/email-recipients.js";
 
@@ -86,6 +87,35 @@ describe("setRecipientStatus", () => {
   });
 });
 
+describe("recordConfirmationAttempt", () => {
+  it("a send stamps when it went out and clears an earlier error", () => {
+    const failedBefore = { ...BEN, confirmation_error: "timeout" };
+    const list = recordConfirmationAttempt([ANA, failedBefore], "ben@example.com", null, NOW);
+    expect(list).toEqual([ANA, { ...BEN, confirmation_sent_at: NOW }]);
+  });
+
+  it("a failure records the error's code and keeps the last send time", () => {
+    const sentBefore = { ...BEN, confirmation_sent_at: NOW };
+    const list = recordConfirmationAttempt(
+      [sentBefore],
+      "ben@example.com",
+      "UnrecognizedClientException",
+      "later",
+    );
+    expect(list).toEqual([
+      { ...BEN, confirmation_sent_at: NOW, confirmation_error: "UnrecognizedClientException" },
+    ]);
+  });
+
+  it("leaves other addresses, and a list without the address, unchanged", () => {
+    const input = [ANA, BEN];
+    const list = recordConfirmationAttempt(input, "gone@example.com", null, NOW);
+    expect(list).toEqual([ANA, BEN]);
+    expect(recordConfirmationAttempt(input, "ben@example.com", "x", NOW)[0]).toBe(ANA);
+    expect(input[1]).toEqual(BEN); // not mutated
+  });
+});
+
 describe("normalizeRecipientList", () => {
   it("drops malformed entries and defaults unknown statuses to pending", () => {
     const list = normalizeRecipientList([
@@ -101,5 +131,16 @@ describe("normalizeRecipientList", () => {
     ]);
     expect(normalizeRecipientList(null)).toEqual([]);
     expect(normalizeRecipientList("[]")).toEqual([]);
+  });
+
+  it("keeps the last confirmation attempt, and only when it's well-formed", () => {
+    const list = normalizeRecipientList([
+      { ...BEN, confirmation_sent_at: NOW, confirmation_error: "timeout" },
+      { ...ANA, confirmation_sent_at: 12345, confirmation_error: "" },
+      { ...ANA, email: "n@example.com", confirmation_error: null },
+    ]);
+    expect(list[0]).toEqual({ ...BEN, confirmation_sent_at: NOW, confirmation_error: "timeout" });
+    expect(list[1]).toEqual(ANA);
+    expect(list[2]).toEqual({ ...ANA, email: "n@example.com" });
   });
 });

@@ -68,7 +68,14 @@
          One visible focus treatment for everything the input rule doesn't
          already cover. Outline (not box-shadow) so it survives any button
          fill, with an offset gap so blue-on-blue stays visible. */
-      :is(textarea, .btn, .channel-pill .remove, .dest-option, .slack-add-button):focus-visible {
+      :is(
+        textarea,
+        .btn,
+        .btn-link,
+        .channel-pill .remove,
+        .dest-option,
+        .slack-add-button
+      ):focus-visible {
         outline: 2px solid var(--figma-color-bg-brand, #0d99ff);
         outline-offset: 1px;
       }
@@ -987,6 +994,34 @@
       }
       .recipient-list .badge {
         flex-shrink: 0;
+      }
+      /* The address's state and, while it hasn't confirmed, its Resend
+         action, kept together at the row's right edge. */
+      .recipient-list .addr-state {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+      /* A quiet in-line action beside a state (Resend, Retry): text only,
+         the danger link's footprint in the brand colour. */
+      .btn-link {
+        background: transparent;
+        border: none;
+        color: var(--figma-color-text-brand, #0d99ff);
+        width: fit-content;
+        padding: 3px 6px;
+        font-size: 11px;
+        font-weight: 500;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .btn-link:hover:not(:disabled) {
+        background: var(--lp-selected-tint);
+      }
+      .btn-link:disabled {
+        color: var(--figma-color-text-disabled, #b3b3b3);
+        cursor: default;
       }
 
       /* ── Connection steps ── */
@@ -3742,8 +3777,11 @@
           : [];
       }
 
-      // Dashboard list: one address per line with its confirmation state.
-      // Built with the DOM API — addresses are user data, never innerHTML.
+      // Dashboard list: one address per line with its confirmation state. An
+      // address that hasn't confirmed shows whether its confirmation email
+      // went out at all ("Email not sent" when the last attempt failed) and a
+      // Resend action. Built with the DOM API — addresses are user data,
+      // never innerHTML.
       function renderRecipients(list) {
         const ul = document.getElementById("dash-recipients");
         ul.replaceChildren();
@@ -3758,12 +3796,116 @@
           addr.className = "addr";
           addr.textContent = r.email;
           addr.title = r.email;
-          const [label, cls] = states[r.status] || states.pending;
+          let [label, cls] = states[r.status] || states.pending;
           const badge = document.createElement("span");
+          if (r.status === "pending" && r.confirmation_error) {
+            label = "Email not sent";
+            cls = "badge badge-danger";
+            badge.title = describeSendFailure(r.confirmation_error);
+          }
           badge.className = cls;
           badge.textContent = label;
-          li.append(addr, badge);
+          const state = document.createElement("span");
+          state.className = "addr-state";
+          state.appendChild(badge);
+          if (r.status === "pending") {
+            const resend = document.createElement("button");
+            resend.type = "button";
+            resend.className = "btn-link";
+            resend.textContent = "Resend";
+            resend.title = `Send the confirmation email to ${r.email} again`;
+            resend.addEventListener("click", () => resendConfirmation(r.email, resend));
+            state.appendChild(resend);
+          }
+          li.append(addr, state);
           ul.appendChild(li);
+        }
+      }
+
+      // Resend: ask the backend to send one address its confirmation again
+      // (the same three-a-day limit as a save), then show the refreshed list.
+      async function resendConfirmation(email, btn) {
+        const label = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Sending…";
+        try {
+          const res = await api("/api/config", {
+            method: "PUT",
+            body: JSON.stringify({ fileKey: app.fileKey, resendConfirmation: email }),
+          });
+          const data = await readJson(res);
+          if (!res.ok) throw new Error(friendlyError(data.error) || "Couldn't resend");
+          const c = data.emailConfirmations || { sent: 0, failed: 0, skipped: 0 };
+          notify(
+            c.sent > 0
+              ? `Confirmation sent to ${email}.`
+              : c.skipped > 0
+                ? "That address has reached today's limit for confirmation emails. Try again tomorrow."
+                : `The confirmation email to ${email} couldn't be sent.`,
+            c.sent === 0,
+          );
+          showSharedConfig(data, data.isOwner === true);
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = label;
+          notify(e.message, true);
+        }
+      }
+
+      // Retry, on the "isn't in a space" notice: a plain re-save of the same
+      // spaces. The backend adds the app to every chosen space it isn't in
+      // and reports the result (api/config.js).
+      async function retryChatMemberships() {
+        const btn = document.getElementById("dash-reconnect-btn");
+        btn.disabled = true;
+        try {
+          const res = await api("/api/config", {
+            method: "PUT",
+            body: JSON.stringify({ fileKey: app.fileKey, gchatSpaces: app.spaces }),
+          });
+          const data = await readJson(res);
+          if (!res.ok) throw new Error(friendlyError(data.error) || "Couldn't retry");
+          const said = savedChatMessage(true, data.spaceMemberships);
+          notify(said.text, said.isError);
+          showSharedConfig(data, data.isOwner === true);
+        } catch (e) {
+          notify(e.message, true);
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      // Send errors that come from the server's email setup, not from the
+      // address: the mail service's error names (lib/email-send.js) and ours.
+      const SERVER_SIDE_SEND_ERRORS = new Set([
+        "UnrecognizedClientException",
+        "InvalidSignatureException",
+        "SignatureDoesNotMatch",
+        "AccessDeniedException",
+        "ExpiredTokenException",
+        "not_configured",
+        "MessageRejected",
+        "MailFromDomainNotVerifiedException",
+        "timeout",
+      ]);
+
+      // Why an email couldn't be sent, in plain words.
+      function describeSendFailure(code) {
+        switch (code) {
+          case "UnrecognizedClientException":
+          case "InvalidSignatureException":
+          case "SignatureDoesNotMatch":
+          case "AccessDeniedException":
+          case "ExpiredTokenException":
+          case "not_configured":
+            return "The email service rejected the server's sending credentials, so nothing was sent. This needs a fix in the server settings, not in the address.";
+          case "MessageRejected":
+          case "MailFromDomainNotVerifiedException":
+            return "The email service refused the sender address. This needs a fix in the server's email setup.";
+          case "timeout":
+            return "The email service didn't answer in time.";
+          default:
+            return code ? `The email service reported: ${code}.` : "The email couldn't be sent.";
         }
       }
 
@@ -3777,10 +3919,22 @@
         const googleBtn = document.getElementById("dash-google-signin");
         const slackAddBtn = document.getElementById("dash-slack-add");
         const status = config.delivery_status || "ok";
+        const lastError =
+          typeof config.last_delivery_error === "string" ? config.last_delivery_error : "";
         const isEmail = config.destination === "email";
         const isGchat = config.destination === "gchat";
         const nobodyConfirmed =
           isEmail && !recipientsOf(config).some((r) => r.status === "confirmed");
+        // Pending addresses whose last confirmation email never went out.
+        const pending = isEmail ? recipientsOf(config).filter((r) => r.status === "pending") : [];
+        const unsent = pending.filter((r) => r.confirmation_error);
+        // Chosen spaces the app isn't in (the backend says per space).
+        const notJoined = isGchat
+          ? (Array.isArray(config.gchat_memberships) ? config.gchat_memberships : []).filter(
+              (m) => m && m.app_member !== true,
+            )
+          : [];
+        const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
         banner.style.display = "none";
         banner.classList.remove("banner-warning");
         btn.style.display = "none";
@@ -3794,9 +3948,15 @@
           banner.style.display = "block";
           banner.classList.add("banner-warning");
           title.textContent = "Deliveries failing";
+          // Say what kind of failure it was: a server-side setting (nothing
+          // the editors can fix here) or something about the targets.
           desc.textContent = isEmail
-            ? "Recent emails couldn't be sent. Check the addresses for typos. We'll try again on the next publish."
-            : "Recent posts to Google Chat failed. Check that Library Pulse is still a member of the chosen spaces (Apps & integrations in the space). We'll try again on the next publish.";
+            ? SERVER_SIDE_SEND_ERRORS.has(lastError)
+              ? `Recent emails couldn't be sent. ${describeSendFailure(lastError)} We'll try again on the next publish.`
+              : "Recent emails couldn't be sent. Check the addresses for typos. We'll try again on the next publish."
+            : lastError.startsWith("app_auth")
+              ? "Library Pulse couldn't sign in to Google Chat, so nothing was posted. A server setting is wrong (the app's federation settings); posts resume once it's fixed."
+              : "Recent posts to Google Chat failed. Check that Library Pulse is still a member of the chosen spaces (Apps & integrations in the space). We'll try again on the next publish.";
         } else if (status !== "ok") {
           // One story per state: badge and banner share the same label and
           // hue family (danger for revoked access, warning for failing sends).
@@ -3849,6 +4009,26 @@
         } else if (config.is_active === false) {
           badge.textContent = "Paused";
           badge.className = "badge badge-warning";
+        } else if (notJoined.length > 0) {
+          // The app isn't in every chosen space: nothing can be posted there
+          // until it is. Stays until a retry (or Google Chat itself) says it's in.
+          const names = notJoined.map((m) => m.display_name || m.name).join(", ");
+          badge.textContent = "Not in every space";
+          badge.className = "badge badge-warning";
+          banner.style.display = "block";
+          banner.classList.add("banner-warning");
+          title.textContent = `Library Pulse isn't in ${plural(notJoined.length, "space", "spaces")}`;
+          desc.textContent = `It couldn't be added to ${names}. If the app's Visibility in Google Cloud blocked it, fix that first, or add Library Pulse from the space's Apps & integrations. Then press Retry to add it with the connected Google account.`;
+          btn.textContent = "Retry";
+          btn.onclick = retryChatMemberships;
+          btn.style.display = "inline-flex";
+        } else if (nobodyConfirmed && pending.length > 0 && unsent.length === pending.length) {
+          // Not "awaiting" anything: no confirmation email ever reached anyone.
+          badge.textContent = "Emails not sent";
+          badge.className = "badge badge-danger";
+          banner.style.display = "block";
+          title.textContent = "The confirmation emails couldn't be sent";
+          desc.textContent = `${describeSendFailure(unsent[0].confirmation_error)} Once it's fixed, use Resend next to an address.`;
         } else if (nobodyConfirmed) {
           // Email is set up, but updates only start once an address confirms.
           badge.textContent = "Awaiting confirmation";
@@ -3857,7 +4037,9 @@
           banner.classList.add("banner-warning");
           title.textContent = "No one has confirmed yet";
           desc.textContent =
-            "Each address was sent a confirmation email. Updates start as soon as one of them confirms. If it hasn't arrived, check the spam folder.";
+            unsent.length > 0
+              ? `${plural(unsent.length, "address", "addresses")} never got the email (see the list). The others were sent one; updates start as soon as someone confirms. If it hasn't arrived, check the spam folder or use Resend.`
+              : "Each address was sent a confirmation email. Updates start as soon as one of them confirms. If it hasn't arrived, check the spam folder or use Resend next to the address.";
         } else {
           badge.textContent = "Active";
           badge.className = "badge badge-success";
@@ -3940,6 +4122,14 @@
             return "That Google account was connected by someone else. Sign in with your own.";
           case "config_exists":
             return "This file is already set up.";
+          case "recipient_not_found":
+            return "That address is no longer on the list.";
+          case "already_confirmed":
+            return "That address is already confirmed.";
+          case "email_unsubscribed":
+            return "That address unsubscribed. To send a new confirmation, remove it and add it again.";
+          case "not_email_config":
+            return "This file doesn't send email updates.";
           default:
             return code || "";
         }

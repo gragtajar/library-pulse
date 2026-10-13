@@ -2,12 +2,24 @@
 import { describe, it, expect } from "vitest";
 import {
   assertDestination,
+  assertEmail,
   assertEmailList,
   assertTimezone,
   isValidEmail,
   normalizeEmail,
 } from "../backend/lib/validators.js";
 import { ValidationError } from "../backend/lib/errors.js";
+
+describe("assertEmail", () => {
+  it("normalizes one address", () => {
+    expect(assertEmail(" Ana@Example.com ")).toBe("ana@example.com");
+  });
+  it("rejects a non-string or malformed address", () => {
+    for (const bad of [undefined, null, 42, "", "nope", "a@b", "@example.com", ["a@b.co"]]) {
+      expect(() => assertEmail(bad)).toThrow(ValidationError);
+    }
+  });
+});
 
 describe("assertDestination", () => {
   it("defaults to slack when absent (older plugin builds)", () => {
